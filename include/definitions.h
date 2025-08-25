@@ -143,4 +143,8 @@ void load_program(grid *g, u8 x, u8 y, const void *bytecode, u8 length);
 void run_grid(grid *g, u32 max_ticks);
 void free_grid(grid *g);
 
+// Assembler
+
+bool assemble_program(const char *source, void **dest, u8 *out_len);
+
 #endif
