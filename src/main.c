@@ -114,13 +114,15 @@ void prepare_slot(grid *g, const char *specification, void **out_data, u8 *out_s
     *out_size = (u32)data_size;
 }
 
+#define MINIMAL_ARGS 6
+
 // Sample program: loads blocklang assembly from a file, assembles it, loads it into a grid for each block and runs it
 int main(int argc, char *argv[])
 {
-    if (argc < 4)
+    if (argc < MINIMAL_ARGS)
     {
         printf(
-            "Usage: %s <input file> <width> <height> <{in|out}:{up|left|right|down}:slot:[value1,value2,value3]> ...\n",
+            "Usage: %s <input file> <width> <height> <debug> <ticks_limit> <{in|out}:{up|left|right|down}:slot:[value1,value2,value3]> ...\n",
             argv[0]);
         printf("example args: test.bl 2 2 \"in:up:0:1,2,3\" \"out:up:1:4,5,6\"\n");
         return 1;
@@ -129,6 +131,8 @@ int main(int argc, char *argv[])
     const char *input_file = argv[1];
     int width = atoi(argv[2]);
     int height = atoi(argv[3]);
+    bool debug = strcmp(argv[4], "true") == 0;
+    int ticks_limit = atoi(argv[5]);
 
     char *source = read_asm_source_file(input_file);
     if (!source)
@@ -151,13 +155,15 @@ int main(int argc, char *argv[])
 
     grid g = initialize_grid(width, height);
 
+    g.debug = debug;
+
     // Prepare IO slots based on command line arguments
     void **data_ptrs = NULL;
     u8 *sizes = NULL;
-    if (argc > 4)
+    if (argc > MINIMAL_ARGS)
     {
-        data_ptrs = malloc((argc - 4) * sizeof(void *));
-        sizes = malloc((argc - 4) * sizeof(u8));
+        data_ptrs = malloc((argc - MINIMAL_ARGS) * sizeof(void *));
+        sizes = malloc((argc - MINIMAL_ARGS) * sizeof(u8));
 
         if (!data_ptrs || !sizes)
         {
@@ -171,14 +177,14 @@ int main(int argc, char *argv[])
             return 1;
         }
 
-        for (int i = 4; i < argc; i++)
+        for (int i = MINIMAL_ARGS; i < argc; i++)
         {
             void *data = NULL;
             u8 size = 0;
             prepare_slot(&g, argv[i], &data, &size);
             // data is owned by the grid now
-            data_ptrs[i - 4] = data;
-            sizes[i - 4] = size;
+            data_ptrs[i - MINIMAL_ARGS] = data;
+            sizes[i - MINIMAL_ARGS] = size;
             // Note: In a real application, you might want to keep track of these pointers to free them later if needed
         }
     }
@@ -189,19 +195,19 @@ int main(int argc, char *argv[])
             load_program(&g, x, y, bytecode, bytecode_len);
         }
 
-    run_grid(&g, 128);
+    run_grid(&g, ticks_limit);
 
     free(bytecode);
     free_grid(&g);
 
     if (data_ptrs)
     {
-        for (int i = 0; i < (argc - 4); i++)
+        for (int i = 0; i < (argc - MINIMAL_ARGS); i++)
         {
             // Print all the results
             if (sizes[i] > 0)
             {
-                printf("Results for \"%s\" \t-> ", argv[i + 4]);
+                printf("Results for \"%s\" \t-> ", argv[i + MINIMAL_ARGS]);
                 u8 *data = (u8 *)data_ptrs[i];
                 for (u8 j = 0; j < sizes[i]; j++)
                 {

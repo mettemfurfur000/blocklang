@@ -449,9 +449,10 @@ block iteration process:
 
 void grid_iterate(grid *g)
 {
-    for (u8 y = 0; y < g->height; y++)
-        for (u8 x = 0; x < g->width; x++)
-            print_block_state(&g->blocks[y * g->width + x]);
+    if (g->debug)
+        for (u8 y = 0; y < g->height; y++)
+            for (u8 x = 0; x < g->width; x++)
+                print_block_state(&g->blocks[y * g->width + x]);
 
     for (u8 y = 0; y < g->height; y++)
         for (u8 x = 0; x < g->width; x++)
@@ -471,7 +472,8 @@ void run_grid(grid *g, u32 max_ticks)
 {
     while (true)
     {
-        printf("tick %d\n", g->ticks);
+        if (g->debug)
+            printf("tick %d\n", g->ticks);
         g->any_ticked = false;
         grid_iterate(g);
 

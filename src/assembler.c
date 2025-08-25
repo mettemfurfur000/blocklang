@@ -261,7 +261,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
 
             if (!found)
             {
-                strncpy(labels[total_labels].name, tok.text, sizeof(labels[total_labels].name) - 1);
+                strncpy(labels[total_labels].name, tok.text, sizeof(labels[total_labels].name));
                 // labels[total_labels].address = program_length + 1;
                 labels[total_labels].address = program_length;
                 total_labels++;

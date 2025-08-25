@@ -130,6 +130,7 @@ typedef struct
     io_slot *slots;
     u8 width, height, perimeter, total_blocks;
     bool any_ticked;
+    bool debug;
     u32 ticks;
 } grid;
 
