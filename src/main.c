@@ -143,7 +143,7 @@ int main(int argc, char *argv[])
 
     grid g = initialize_grid(width, height);
 
-#define DEFALT_IO_SIZE 32
+#define DEFALT_IO_SIZE 16
 
     u8 *default_input = calloc(DEFALT_IO_SIZE, 1);
     u8 *default_output = calloc(DEFALT_IO_SIZE, 1);
@@ -156,7 +156,7 @@ int main(int argc, char *argv[])
             load_program(&g, x, y, bytecode, bytecode_len);
         }
 
-    run_grid(&g, 512);
+    run_grid(&g, 128);
 
     for (u8 i = 0; i < DEFALT_IO_SIZE; i++)
         printf("%d -> %d\n", default_input[i], default_output[i]);

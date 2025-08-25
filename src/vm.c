@@ -75,7 +75,12 @@ void write_byte(io_slot *slot, u8 val)
 
 void block_iter_pre_move(grid *g, block *b, u8 x, u8 y)
 {
-    if (!b->bytecode || b->state_halted || b->waiting_for_io || b->waiting_ticks)
+    if (!b->bytecode || b->state_halted || b->waiting_for_io)
+        return;
+
+    g->any_ticked = true;
+
+    if (b->waiting_ticks)
         return;
 
     if (b->current_instruction >= b->length)
@@ -89,7 +94,6 @@ void block_iter_pre_move(grid *g, block *b, u8 x, u8 y)
         return;
     }
 
-    g->any_ticked = true;
     b->transfered = false;
 
     // prepare block interactions
@@ -157,6 +161,8 @@ void block_iter_write_to(grid *g, block *b, u8 x, u8 y)
         return;
     if (!b->waiting_transfer)
         return;
+    if (b->waiting_ticks)
+        return;
 
     side side = b->transfer_side;
     io_slot *slot = NULL;
@@ -201,6 +207,8 @@ void block_iter_read_from(grid *g, block *b, u8 x, u8 y)
     if (!b->waiting_for_io) // not waiting for io
         return;
     if (b->waiting_transfer) // block is actually supposed to write data - not reading anything
+        return;
+    if (b->waiting_ticks)
         return;
 
     side side = b->transfer_side;
@@ -253,7 +261,11 @@ void block_iter_exec_op(grid *g, block *b, u8 x, u8 y)
 {
     if (!b->bytecode || b->state_halted)
         return;
-    instruction i = b->bytecode[b->current_instruction];
+    if (b->waiting_ticks)
+    {
+        b->waiting_ticks--;
+        return;
+    }
 
     if (b->waiting_for_io) // still waiting for IO, cant do the thing
         return;
@@ -263,6 +275,8 @@ void block_iter_exec_op(grid *g, block *b, u8 x, u8 y)
 
     if (b->transfered)
         operand_value = b->transfer_value;
+
+    instruction i = b->bytecode[b->current_instruction];
 
     switch (i.target)
     {
@@ -419,8 +433,9 @@ void print_block_state(block *b)
     }
 
     instruction i = b->bytecode ? b->bytecode[b->current_instruction] : (instruction){};
-    printf("\t[%d :\t %s-%s ]\t { acc: %d, io: %d, put: %d }\n", b->current_instruction, op_code_str(i.operation),
-           target_str(i.target), b->accumulator, b->waiting_for_io, b->waiting_transfer);
+    printf("\t[%d :\t %s-%s ]\t { acc: %d, io: %d, put: %d, waiting: %d }\n", b->current_instruction,
+           op_code_str(i.operation), target_str(i.target), b->accumulator, b->waiting_for_io, b->waiting_transfer,
+           b->waiting_ticks);
 }
 
 /*
