@@ -1,3 +1,4 @@
+```
 Below is a concise, formal specification for BlockLang, the tiny byte‑code language.
 
 1. Overview
@@ -136,3 +137,4 @@ number       ::= decimal_literal | hex_literal
 identifier   ::= letter {letter | digit | '_' }
 comment      ::= ';' {any_char}
 whitespace   ::= space | tab
+```
