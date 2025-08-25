@@ -34,6 +34,7 @@ void block_io_unlock(block *b)
     assert(b != NULL);
 
     b->waiting_for_io = false;
+    b->waiting_transfer = false;
     b->transfered = true;
     b->last_caused_overflow = false;
 }
@@ -43,6 +44,7 @@ void block_io_unlock_error(block *b)
     assert(b != NULL);
 
     b->waiting_for_io = false;
+    b->waiting_transfer = false;
     b->transfered = false;
     b->last_caused_overflow = true;
 }
@@ -272,6 +274,7 @@ void block_iter_exec_op(grid *g, block *b, u8 x, u8 y)
         break;
     case ACC:
         operand_value = b->accumulator;
+        break;
     case RG0:
     case RG1:
     case RG2:
@@ -285,7 +288,7 @@ void block_iter_exec_op(grid *g, block *b, u8 x, u8 y)
     case NIL:
         operand_value = 0;
         break;
-    case STKLEN:
+    case SLN:
         operand_value = b->stack_top >= 0 ? b->stack_top + 1 : 0;
         break;
     }
@@ -352,7 +355,59 @@ void block_iter_exec_op(grid *g, block *b, u8 x, u8 y)
         break;
     }
 
-    b->current_instruction = advance_to >= b->length ? 0 : advance_to;
+    b->current_instruction = advance_to >= b->length ? b->length - 1 : advance_to;
+}
+
+#define CASE(x)                                                                                                        \
+    case x:                                                                                                            \
+        return #x;
+
+const char *op_code_str(u8 opcode)
+{
+    switch (opcode)
+    {
+        CASE(NOP)
+        CASE(WAIT)
+        CASE(ADD)
+        CASE(SUB)
+        CASE(MLT)
+        CASE(DIV)
+        CASE(MOD)
+        CASE(GET)
+        CASE(PUT)
+        CASE(PUSH)
+        CASE(POP)
+        CASE(JMP)
+        CASE(JEZ)
+        CASE(JNZ)
+        CASE(JOF)
+        CASE(HALT)
+    default:
+        return "???";
+    }
+}
+
+const char *target_str(u8 target)
+{
+    switch (target)
+    {
+        CASE(STK)
+        CASE(ACC)
+        CASE(RG0)
+        CASE(RG1)
+        CASE(RG2)
+        CASE(RG3)
+        CASE(ADJ)
+        CASE(UP)
+        CASE(RIG)
+        CASE(DWN)
+        CASE(LFT)
+        CASE(ANY)
+        CASE(NIL)
+        CASE(SLN)
+    default:
+        return "???";
+    }
 }
 
 void print_block_state(block *b)
@@ -364,8 +419,8 @@ void print_block_state(block *b)
     }
 
     instruction i = b->bytecode ? b->bytecode[b->current_instruction] : (instruction){};
-    printf("\t[%d :\t %x-%x ] { %d, io: %d, put: %d }\n", b->current_instruction, i.operation, i.target, b->accumulator,
-           b->waiting_for_io, b->waiting_transfer);
+    printf("\t[%d :\t %s-%s ]\t { acc: %d, io: %d, put: %d }\n", b->current_instruction, op_code_str(i.operation),
+           target_str(i.target), b->accumulator, b->waiting_for_io, b->waiting_transfer);
 }
 
 /*

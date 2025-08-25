@@ -143,20 +143,22 @@ int main(int argc, char *argv[])
 
     grid g = initialize_grid(width, height);
 
-    u8 *default_input = calloc(width, 1);
-    u8 *default_output = calloc(width, 1);
+#define DEFALT_IO_SIZE 32
+
+    u8 *default_input = calloc(DEFALT_IO_SIZE, 1);
+    u8 *default_output = calloc(DEFALT_IO_SIZE, 1);
 
     for (u8 y = 0; y < g.height; y++)
         for (u8 x = 0; x < g.width; x++)
         {
-            attach_input(&g, up, x, default_input, width);
-            attach_output(&g, down, x, default_output, width);
+            attach_input(&g, up, x, default_input, DEFALT_IO_SIZE);
+            attach_output(&g, down, x, default_output, DEFALT_IO_SIZE);
             load_program(&g, x, y, bytecode, bytecode_len);
         }
 
-    run_grid(&g, 1000);
+    run_grid(&g, 512);
 
-    for (u8 i = 0; i < width; i++)
+    for (u8 i = 0; i < DEFALT_IO_SIZE; i++)
         printf("%d -> %d\n", default_input[i], default_output[i]);
 
     free(bytecode);

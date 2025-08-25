@@ -21,4 +21,5 @@ obj/%.o : src/%.cpp
 
 all: $(objects)
 	gcc ${CFLAGS} -o build/app $(objects) $(LDFLAGS)
+	cp -r programs/* build/
 

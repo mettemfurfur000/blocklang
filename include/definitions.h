@@ -50,7 +50,7 @@ typedef enum
     ANY, // to anyone ready to perform an transfer
     // other
     NIL,    // always zero, if chosen as destination, consumes input
-    STKLEN, // represents the number of elements on the stack
+    SLN, // represents the number of elements on the stack
     LAST
 } targets;
 

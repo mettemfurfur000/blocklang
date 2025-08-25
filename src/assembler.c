@@ -44,7 +44,8 @@ int string_to_opcode(const char *str)
 
 int string_to_target(const char *str)
 {
-    const char *targets[] = {"STK", "ACC", "RG0", "RG1", "RG2", "RG3", "ADJ", "UP", "RIG", "DWN", "LFT", "ANY", "NIL", "STKLEN"};
+    const char *targets[] = {"STK", "ACC", "RG0", "RG1", "RG2", "RG3", "ADJ",
+                             "UP",  "RIG", "DWN", "LFT", "ANY", "NIL", "SLN"};
     for (size_t i = 0; i < sizeof(targets) / sizeof(targets[0]); i++)
     {
         if (strcmp(str, targets[i]) == 0)
@@ -61,7 +62,7 @@ static const char *valid_opcodes[] = {"nop", "wait", "add", "sub", "mlt", "div",
 
 static const char *valid_targets[] = {"STK", "ACC", "RG0", "RG1", "RG2", "RG3",
                                       //"ADJ", // adj is only used internally as a target for literal values
-                                      "UP", "RIG", "DWN", "LFT", "ANY", "NIL", "STKLEN"};
+                                      "UP", "RIG", "DWN", "LFT", "ANY", "NIL", "SLN"};
 
 bool is_valid_opcode(const char *str)
 {
@@ -261,12 +262,12 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
             if (!found)
             {
                 strncpy(labels[total_labels].name, tok.text, sizeof(labels[total_labels].name) - 1);
-                labels[total_labels].address = program_length + 1;
+                // labels[total_labels].address = program_length + 1;
+                labels[total_labels].address = program_length;
                 total_labels++;
 
                 // Labels require extra byte to be stored in bytecode
-
-                program_length++;
+                // program_length++;
             }
         }
         else if (tok.type == TOK_OPCODE)
@@ -289,6 +290,12 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
                     fprintf(stderr, "Expected a label, number or a target after jump opcode [%s], got [%s]\n", tok.text,
                             next.text);
                     return false;
+                }
+
+                if (next.type == TOK_NUMBER || next.type == TOK_LABEL)
+                {
+                    // Labels and numbers in from of a jump require extra byte to be stored in bytecode
+                    program_length++;
                 }
             }
             // the rest of the instructions expect a target/number here
@@ -330,7 +337,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
         token tok = next_token(&s);
         if (tok.type == TOK_EOF)
             break;
-        else if (tok.type == TOK_LABEL)
+        else if (tok.type == TOK_LABEL || tok.type == TOK_COMMENT)
         {
             // Ignore labels in second pass
         }
