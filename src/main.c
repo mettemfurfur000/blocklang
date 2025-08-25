@@ -8,9 +8,9 @@ int main()
 {
     grid g = initialize_grid(1, 2);
 
-    #define LEN 4
+#define LEN 1
 
-    u8 test[LEN] = {1, 2, 3, 4};
+    u8 test[LEN] = {10};
     u8 out[LEN] = {};
 
     attach_input(&g, up, 0, test, sizeof(test));
@@ -24,8 +24,9 @@ int main()
     code_sample[cur++] = (instruction){.operation = JOF, .target = ADJ};  // 1
     ((u8 *)code_sample)[cur++] = 7;                                       // 2
     code_sample[cur++] = (instruction){.operation = ADD, .target = ADJ};  // 3
-    ((u8 *)code_sample)[cur++] = 1;                                      // 4
-    code_sample[cur++] = (instruction){.operation = PUT, .target = DWN};  // 5
+    ((u8 *)code_sample)[cur++] = 1;                                       // 4
+    // code_sample[cur++] = (instruction){.operation = PUT, .target = DWN};  // 5
+    code_sample[cur++] = (instruction){.operation = PUT, .target = ANY};  // 5
     code_sample[cur++] = (instruction){.operation = JMP, .target = NIL};  // 6
     code_sample[cur++] = (instruction){.operation = HALT, .target = NIL}; // 7
 

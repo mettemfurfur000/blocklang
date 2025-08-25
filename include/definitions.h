@@ -50,7 +50,6 @@ typedef enum
     ANY, // to anyone ready to perform an transfer
     // other
     NIL, // always zero, if chosen as destination, consumes input
-    HALT, // stops execution
     LAST
 } targets;
 
@@ -80,10 +79,10 @@ typedef enum
     JNZ, // from target - jump if ACC not zero
     JOF, // jump if last arithmetic operation caused an overflow or underflow
 
-    LST,
+    HALT, // stops execution
 } operations;
 
-static_assert(LST <= 15, "");
+static_assert(HALT <= 15, "");
 
 typedef struct
 {
