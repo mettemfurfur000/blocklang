@@ -1,12 +1,12 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "../include/definitions.h"
 
-int main()
+bool test_basic_move_down()
 {
-
     instruction code_sample[8] = {};
 
     code_sample[0] = (instruction){.operation = GET, .target = UP};
@@ -58,7 +58,7 @@ int main()
 
     // return 0;
 
-    grid g = initialize_grid(1, 2);
+    grid g = initialize_grid(1, 4);
 
 #define LEN 1
 
@@ -72,6 +72,8 @@ int main()
     // load_program(&g, 0, 1, code_sample, sizeof(code_sample));
     load_program(&g, 0, 0, bytecode, bytecode_len);
     load_program(&g, 0, 1, bytecode, bytecode_len);
+    load_program(&g, 0, 2, bytecode, bytecode_len);
+    load_program(&g, 0, 3, bytecode, bytecode_len);
 
     run_grid(&g, 32);
 
@@ -80,5 +82,85 @@ int main()
     for (u8 i = 0; i < sizeof(test); i++)
         printf("%d -> %d\n", test[i], out[i]);
 
-    //     return 0;
+    return 0;
+}
+
+char *read_asm_source_file(const char *filename)
+{
+    FILE *file = fopen(filename, "r");
+    if (!file)
+        return NULL;
+
+    fseek(file, 0, SEEK_END);
+    long filesize = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    char *buffer = calloc(filesize + 1, 1);
+    if (!buffer)
+    {
+        fclose(file);
+        return NULL;
+    }
+
+    fread(buffer, 1, filesize, file);
+    buffer[filesize] = '\0';
+
+    fclose(file);
+    return buffer;
+}
+
+// Sample program: loads blocklang assembly from a file, assembles it, loads it into a grid for each block and runs it
+int main(int argc, char *argv[])
+{
+    if (argc != 4)
+    {
+        printf("Usage: %s <input file> <width> <height>\n", argv[0]);
+        return 1;
+    }
+
+    const char *input_file = argv[1];
+    int width = atoi(argv[2]);
+    int height = atoi(argv[3]);
+
+    char *source = read_asm_source_file(input_file);
+    if (!source)
+    {
+        fprintf(stderr, "Failed to read source file: %s\n", input_file);
+        return 1;
+    }
+
+    void *bytecode = NULL;
+    u8 bytecode_len = 0;
+
+    if (!assemble_program(source, &bytecode, &bytecode_len))
+    {
+        fprintf(stderr, "Assembly failed\n");
+        free(source);
+        return 1;
+    }
+
+    free(source);
+
+    grid g = initialize_grid(width, height);
+
+    u8 *default_input = calloc(width, 1);
+    u8 *default_output = calloc(width, 1);
+
+    for (u8 y = 0; y < g.height; y++)
+        for (u8 x = 0; x < g.width; x++)
+        {
+            attach_input(&g, up, x, default_input, width);
+            attach_output(&g, down, x, default_output, width);
+            load_program(&g, x, y, bytecode, bytecode_len);
+        }
+
+    run_grid(&g, 1000);
+
+    for (u8 i = 0; i < width; i++)
+        printf("%d -> %d\n", default_input[i], default_output[i]);
+
+    free(bytecode);
+    free_grid(&g);
+
+    return 0;
 }

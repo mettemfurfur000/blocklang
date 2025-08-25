@@ -49,7 +49,8 @@ typedef enum
     LFT, // left block / slot
     ANY, // to anyone ready to perform an transfer
     // other
-    NIL, // always zero, if chosen as destination, consumes input
+    NIL,    // always zero, if chosen as destination, consumes input
+    STKLEN, // represents the number of elements on the stack
     LAST
 } targets;
 
@@ -101,14 +102,14 @@ typedef struct
     u8 registers[4]; // 4 registers
     u8 accumulator;  // ACC is stored here
     u8 stack[16];
-    u8 stack_top;
+    i8 stack_top;
 
     u8 waiting_ticks; // if not zero, will substract 1 and do nothing
 
-    u8 transfer_value;    // temporary place for transfered values
-    u8 transfer_side;     // 0-3 for valid sides, 4 for any side
+    u8 transfer_value;     // temporary place for transfered values
+    u8 transfer_side;      // 0-3 for valid sides, 4 for any side
     bool waiting_transfer; // false if accepts values
-    bool waiting_for_io;  // will be set to true if transfer is needed
+    bool waiting_for_io;   // will be set to true if transfer is needed
     bool transfered;
     bool state_halted;
 

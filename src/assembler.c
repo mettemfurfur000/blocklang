@@ -44,7 +44,7 @@ int string_to_opcode(const char *str)
 
 int string_to_target(const char *str)
 {
-    const char *targets[] = {"STK", "ACC", "RG0", "RG1", "RG2", "RG3", "ADJ", "UP", "RIG", "DWN", "LFT", "ANY", "NIL"};
+    const char *targets[] = {"STK", "ACC", "RG0", "RG1", "RG2", "RG3", "ADJ", "UP", "RIG", "DWN", "LFT", "ANY", "NIL", "STKLEN"};
     for (size_t i = 0; i < sizeof(targets) / sizeof(targets[0]); i++)
     {
         if (strcmp(str, targets[i]) == 0)
@@ -61,7 +61,7 @@ static const char *valid_opcodes[] = {"nop", "wait", "add", "sub", "mlt", "div",
 
 static const char *valid_targets[] = {"STK", "ACC", "RG0", "RG1", "RG2", "RG3",
                                       //"ADJ", // adj is only used internally as a target for literal values
-                                      "UP", "RIG", "DWN", "LFT", "ANY", "NIL"};
+                                      "UP", "RIG", "DWN", "LFT", "ANY", "NIL", "STKLEN"};
 
 bool is_valid_opcode(const char *str)
 {
@@ -89,12 +89,8 @@ token next_token(const char **src)
     token tok = {0};
     const char *s = *src;
 
-    // Skip whitespace
-    while (*s == ' ' || *s == '\t')
-        s++;
-
-    // Skip newlines
-    while (*s == '\n' || *s == '\r')
+    // Skip whitespace and newlines
+    while (*s == ' ' || *s == '\t' || *s == '\n' || *s == '\r')
         s++;
 
     if (*s == '\0')
@@ -207,7 +203,7 @@ token next_token(const char **src)
 
     // Unknown character
 
-    fprintf(stderr, "Unknown character: %c\n", *s);
+    fprintf(stderr, "Unknown character: \"%c\" at position %d\n", *s, (int)(s - *src));
     exit(1);
 
     return tok; // Unreachable

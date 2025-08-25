@@ -131,10 +131,18 @@ void block_iter_pre_move(grid *g, block *b, u8 x, u8 y)
         b->waiting_for_io = true;
         return;
     case POP:
-        b->transfer_value = b->stack[b->stack_top];
-        b->stack_top--;
+        if (b->stack_top < 0)
+        {
+            b->transfer_value = 0;
+        }
+        else
+        {
+            b->transfer_value = b->stack[(u8)b->stack_top];
+            b->stack_top--;
+        }
         b->waiting_transfer = true;
         b->waiting_for_io = true;
+
         return;
     }
 }
@@ -257,7 +265,10 @@ void block_iter_exec_op(grid *g, block *b, u8 x, u8 y)
     switch (i.target)
     {
     case STK:
-        operand_value = b->stack[b->stack_top];
+        if (b->stack_top < 0)
+            operand_value = 0;
+        else
+            operand_value = b->stack[(u8)b->stack_top];
         break;
     case ACC:
         operand_value = b->accumulator;
@@ -273,6 +284,9 @@ void block_iter_exec_op(grid *g, block *b, u8 x, u8 y)
         break;
     case NIL:
         operand_value = 0;
+        break;
+    case STKLEN:
+        operand_value = b->stack_top >= 0 ? b->stack_top + 1 : 0;
         break;
     }
 
@@ -310,8 +324,13 @@ void block_iter_exec_op(grid *g, block *b, u8 x, u8 y)
         // case PUT:
         // break;
     case PUSH:
+        if (b->stack_top >= 15)
+        {
+            b->last_caused_overflow = true;
+            break;
+        }
         b->stack_top++;
-        b->stack[b->stack_top] = operand_value;
+        b->stack[(u8)b->stack_top] = operand_value;
         break;
         // handled in pre-transfer
         // case POP:
