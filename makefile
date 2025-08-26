@@ -1,5 +1,5 @@
-CFLAGS += -O3 -Wall# -g -pg -no-pie
-LDFLAGS += -lm# -g -pg
+CFLAGS += -O0 -Wall -g #-pg -no-pie
+LDFLAGS += -lm -g# -pg
 
 LDFLAGS += -LC:/msys64/mingw64/lib -lmingw32 -lws2_32
 
@@ -23,3 +23,6 @@ all: $(objects)
 	gcc ${CFLAGS} -o build/app $(objects) $(LDFLAGS)
 	cp -r programs/* build/
 
+clean:
+	rm build/*
+	rm obj/*

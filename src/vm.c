@@ -33,6 +33,7 @@ void block_io_unlock(block *b)
 {
     assert(b != NULL);
 
+    b->transfer_side = invalid;
     b->waiting_for_io = false;
     b->waiting_transfer = false;
     b->transfered = true;
@@ -43,6 +44,7 @@ void block_io_unlock_error(block *b)
 {
     assert(b != NULL);
 
+    b->transfer_side = invalid;
     b->waiting_for_io = false;
     b->waiting_transfer = false;
     b->transfered = false;
@@ -86,7 +88,7 @@ void block_iter_pre_move(grid *g, block *b, u8 x, u8 y)
     if (b->current_instruction >= b->length)
         b->current_instruction = 0;
 
-    instruction i = b->bytecode[b->current_instruction];
+    const instruction i = b->bytecode[b->current_instruction];
 
     if (i.operation == HALT)
     {
@@ -96,7 +98,7 @@ void block_iter_pre_move(grid *g, block *b, u8 x, u8 y)
 
     b->transfered = false;
 
-    // prepare block interactions
+    // prepare block interactions, if target is a block
 
     switch (i.target)
     {
@@ -108,51 +110,48 @@ void block_iter_pre_move(grid *g, block *b, u8 x, u8 y)
         b->transfer_side = i.target - UP;
         break;
     default:
-        return; // no block interactions needed
+        // no block interactions needed
+        b->transfer_side = invalid;
     }
 
-    switch (i.operation) // if operation requires reading from target:
+    if (b->transfer_side != invalid)
     {
-    case WAIT:
-    case ADD:
-    case SUB:
-    case MLT:
-    case DIV:
-    case MOD:
-    case GET:
-    case PUSH:
-    case JMP:
-    case JEZ:
-    case JNZ:
-        b->waiting_transfer = false; // will read values from target
         b->waiting_for_io = true;
-        return;
+
+        switch (i.operation)
+        {
+        case WAIT:
+        case ADD:
+        case SUB:
+        case MLT:
+        case DIV:
+        case MOD:
+        case GET:
+        case PUSH:
+        case JMP:
+        case JEZ:
+        case JNZ:
+            b->waiting_transfer = false; // will read values from target
+            return;
+        }
+
+        b->waiting_transfer = true;
     }
 
     switch (i.operation) // if operation requires writing to target:
     {
     case PUT:
+        b->transfered = !b->waiting_for_io;
         b->transfer_value = b->accumulator;
-        b->waiting_transfer = true;
-        b->waiting_for_io = true;
-        return;
+        break;
     case POP:
-        if (b->stack_top < 0)
-        {
-            b->transfer_value = 0;
-        }
-        else
-        {
-            b->transfer_value = b->stack[(u8)b->stack_top];
-            b->stack_top--;
-        }
-        b->waiting_transfer = true;
-        b->waiting_for_io = true;
-
-        return;
+        b->transfered = !b->waiting_for_io;
+        b->transfer_value = b->stack_top < 0 ? 0 : b->stack[(u8)b->stack_top--];
+        break;
     }
 }
 
+// write values to target
 void block_iter_write_to(grid *g, block *b, u8 x, u8 y)
 {
     if (!b->bytecode || b->state_halted)
@@ -164,8 +163,11 @@ void block_iter_write_to(grid *g, block *b, u8 x, u8 y)
     if (b->waiting_ticks)
         return;
 
-    side side = b->transfer_side;
+    const side side = b->transfer_side;
     io_slot *slot = NULL;
+
+    if (side == invalid)
+        return;
 
     if (side == 4)
     {
@@ -200,6 +202,7 @@ void block_iter_write_to(grid *g, block *b, u8 x, u8 y)
     block_io_unlock_error(b);
 }
 
+// read values from neighboink blocks
 void block_iter_read_from(grid *g, block *b, u8 x, u8 y)
 {
     if (!b->bytecode || b->state_halted)
@@ -214,6 +217,10 @@ void block_iter_read_from(grid *g, block *b, u8 x, u8 y)
     side side = b->transfer_side;
     io_slot *slot = NULL;
 
+    if (side == invalid)
+        return;
+
+    u8 look_counter = 0;
 again:
     if (side != 4) // for specific sides:
     {
@@ -238,7 +245,7 @@ again:
                 return;
             }
 
-            return;
+            return; // wait for more mayb he will send data soon
         }
 
         if (can_read(slot))
@@ -248,12 +255,20 @@ again:
             return;
         }
 
-        block_io_unlock_error(b);
+        block_io_unlock_error(b); // cannot read - ran out of bytes it seems
+        return;
+    } // side is ANY
+
+    if (look_counter > 4) // didn find anything! must be a 1x1 world with no outputs
+    {
+        // block_io_unlock_error(b);
+        assert(0 && "Grid 1x1 with no outputs");
         return;
     }
 
-    // ANY side - look for anything that can get us bytes, start with up and loop to left
+    // look for anything that can get us bytes, start with up and loop to left
     side = side == 4 ? up : side + 1;
+    look_counter++;
     goto again;
 }
 
@@ -278,95 +293,130 @@ void block_iter_exec_op(grid *g, block *b, u8 x, u8 y)
 
     instruction i = b->bytecode[b->current_instruction];
 
-    switch (i.target)
-    {
-    case STK:
-        if (b->stack_top < 0)
-            operand_value = 0;
-        else
-            operand_value = b->stack[(u8)b->stack_top];
-        break;
-    case ACC:
-        operand_value = b->accumulator;
-        break;
-    case RG0:
-    case RG1:
-    case RG2:
-    case RG3:
-        operand_value = b->registers[i.target - RG0];
-        break;
-    case ADJ:
-        operand_value = ((u8 *)(b->bytecode))[b->current_instruction + 1];
-        advance_to++;
-        break;
-    case NIL:
-        operand_value = 0;
-        break;
-    case SLN:
-        operand_value = b->stack_top >= 0 ? b->stack_top + 1 : 0;
-        break;
-    }
-
-    switch (i.operation)
-    {
-    case WAIT:
-        b->waiting_ticks = operand_value;
-        break;
-    case ADD:
-        b->last_caused_overflow = b->accumulator + operand_value > 255;
-        b->accumulator += operand_value;
-        break;
-    case SUB:
-        b->last_caused_overflow = b->accumulator - operand_value < 0;
-        b->accumulator -= operand_value;
-        break;
-    case MLT:
-        b->last_caused_overflow = b->accumulator * operand_value > 255;
-        b->accumulator -= operand_value;
-        break;
-    case DIV:
-        b->last_caused_overflow = operand_value == 0;
-        if (operand_value != 0)
-            b->accumulator /= operand_value;
-        break;
-    case MOD:
-        b->last_caused_overflow = operand_value == 0;
-        if (operand_value != 0)
-            b->accumulator %= operand_value;
-        break;
-    case GET:
-        b->accumulator = operand_value;
-        break;
-        // handled in pre-transfer
-        // case PUT:
-        // break;
-    case PUSH:
-        if (b->stack_top >= 15)
+    // handle write to targets that doesn require inter-block transfers
+    if (i.operation == PUT || i.operation == POP)
+    { // these will read from ACC and write into targets that are not blocks
+        switch (i.target)
         {
-            b->last_caused_overflow = true;
+        case STK:
+            if (b->stack_top < 0)
+                b->last_caused_overflow = true;
+            else
+                b->stack[(u8)b->stack_top] = operand_value;
+            break;
+        case ACC:
+            b->accumulator = operand_value; // from acc to acc?
+            break;
+        case RG0:
+        case RG1:
+        case RG2:
+        case RG3:
+            b->registers[i.target - RG0] = operand_value;
+            break;
+        case ADJ:
+            // reflection!!!!
+            ((u8 *)(b->bytecode))[b->current_instruction + 1] = operand_value;
+            advance_to++;
+            break;
+        case NIL:
+            // nothing
+            break;
+        case SLN:
+            // nothing
             break;
         }
-        b->stack_top++;
-        b->stack[(u8)b->stack_top] = operand_value;
-        break;
-        // handled in pre-transfer
-        // case POP:
-        // break;
-    case JMP:
-        advance_to = operand_value;
-        break;
-    case JEZ:
-        if (b->accumulator == 0)
+    }
+    else
+    {
+        // check for local targets to read values from them
+
+        switch (i.target)
+        {
+        case STK:
+            if (b->stack_top < 0)
+                operand_value = 0;
+            else
+                operand_value = b->stack[(u8)b->stack_top];
+            break;
+        case ACC:
+            operand_value = b->accumulator;
+            break;
+        case RG0:
+        case RG1:
+        case RG2:
+        case RG3:
+            operand_value = b->registers[i.target - RG0];
+            break;
+        case ADJ:
+            operand_value = ((u8 *)(b->bytecode))[b->current_instruction + 1];
+            advance_to++;
+            break;
+        case NIL:
+            operand_value = 0;
+            break;
+        case SLN:
+            operand_value = b->stack_top >= 0 ? b->stack_top + 1 : 0;
+            break;
+        case CUR:
+            operand_value = b->current_instruction;
+            break;
+        }
+
+        switch (i.operation) // these only write to acc
+        {
+        case WAIT:
+            b->waiting_ticks = operand_value;
+            break;
+        case ADD:
+            b->last_caused_overflow = b->accumulator + operand_value > 255;
+            b->accumulator += operand_value;
+            break;
+        case SUB:
+            b->last_caused_overflow = b->accumulator - operand_value < 0;
+            b->accumulator -= operand_value;
+            break;
+        case MLT:
+            b->last_caused_overflow = b->accumulator * operand_value > 255;
+            b->accumulator -= operand_value;
+            break;
+        case DIV:
+            b->last_caused_overflow = operand_value == 0;
+            if (operand_value != 0)
+                b->accumulator /= operand_value;
+            break;
+        case MOD:
+            b->last_caused_overflow = operand_value == 0;
+            if (operand_value != 0)
+                b->accumulator %= operand_value;
+            break;
+        case GET:
+            b->accumulator = operand_value;
+            break;
+        case PUSH:
+            if (b->stack_top >= 15)
+            {
+                b->last_caused_overflow = true;
+                break;
+            }
+            b->stack_top++;
+            b->stack[(u8)b->stack_top] = operand_value;
+            break;
+        case JMP:
             advance_to = operand_value;
-        break;
-    case JNZ:
-        if (b->accumulator != 0)
-            advance_to = operand_value;
-        break;
-    case JOF:
-        if (b->last_caused_overflow)
-            advance_to = operand_value;
-        break;
+            break;
+        case JEZ:
+            if (b->accumulator == 0)
+                advance_to = operand_value;
+            break;
+        case JNZ:
+            if (b->accumulator != 0)
+                advance_to = operand_value;
+            break;
+        case JOF:
+            if (b->last_caused_overflow)
+                advance_to = operand_value;
+            break;
+        }
     }
 
     b->current_instruction = advance_to >= b->length ? b->length - 1 : advance_to;
@@ -433,9 +483,9 @@ void print_block_state(block *b)
     }
 
     instruction i = b->bytecode ? b->bytecode[b->current_instruction] : (instruction){};
-    printf("\t[%d :\t %s-%s ]\t { acc: %d, io: %d, put: %d, waiting: %d }\n", b->current_instruction,
-           op_code_str(i.operation), target_str(i.target), b->accumulator, b->waiting_for_io, b->waiting_transfer,
-           b->waiting_ticks);
+    printf("\t[%d :\t %s-%s ]\t { trf: %d acc: %d, io: %d, put: %d, waiting: %d }\n", //
+           b->current_instruction, op_code_str(i.operation), target_str(i.target),    //
+           b->transfer_value, b->accumulator, b->waiting_for_io, b->waiting_transfer, b->waiting_ticks);
 }
 
 /*

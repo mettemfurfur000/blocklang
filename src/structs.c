@@ -94,5 +94,6 @@ void load_program(grid *g, u8 x, u8 y, const void *bytecode, u8 length)
     b->bytecode = (void *)bytecode;
     b->length = length;
     b->stack_top = -1;
+    b->transfer_side = invalid;
     b->current_instruction = 0;
 }

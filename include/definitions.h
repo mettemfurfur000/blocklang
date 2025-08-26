@@ -19,7 +19,9 @@ typedef enum
     up,
     right,
     down,
-    left
+    left,
+    any,
+    invalid
 } side;
 
 /*
@@ -49,9 +51,10 @@ typedef enum
     LFT, // left block / slot
     ANY, // to anyone ready to perform an transfer
     // other
-    NIL,    // always zero, if chosen as destination, consumes input
+    NIL, // always zero, if chosen as destination, consumes input
     SLN, // represents the number of elements on the stack
-    LAST
+    CUR, // represents instruction counter
+    LAST // unused target!
 } targets;
 
 static_assert(LAST <= 15, "");
@@ -78,7 +81,7 @@ typedef enum
     JMP, // from target - jump to said position in a program
     JEZ, // from target - jump if ACC equals zero
     JNZ, // from target - jump if ACC not zero
-    JOF, // jump if last arithmetic operation caused an overflow or underflow
+    JOF, // from target - jump if last arithmetic operation caused an overflow or underflow
 
     HALT, // stops execution
 } operations;

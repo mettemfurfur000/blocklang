@@ -1,0 +1,29 @@
+    get UP      ; get from up top to acc
+    jof end     ; if out of bytes we quit
+
+    push ACC        ; push value from up
+    push 5          ; push 5
+    push CUR        ; push current address 
+    jmp func_add    ; `call` a function
+    get RG0         ; retrieve results in rg 0
+
+    put ANY         ; put result somewhere - locks here
+    jmp NIL         ; jump to instruction 0
+end:
+    halt
+
+; 2 args, ret at rg0
+func_add:
+    pop RG3     ; pop return addr to reg 3
+
+    pop RG0     ; second arg to reg 0
+    pop ACC     ; second arg to acc
+
+    add RG0     ; add 2 together
+    put RG0     ; put result to reg 0
+
+    get RG3     ; one last thing left - return address
+    add 3       ; add 3 to start executing whatevr is infront of 
+                ; `push CUR`, `jmp ADJ`, <label addr>` to 
+                ; continue executing
+    jmp ACC     ; jump there

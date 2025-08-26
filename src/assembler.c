@@ -45,7 +45,7 @@ int string_to_opcode(const char *str)
 int string_to_target(const char *str)
 {
     const char *targets[] = {"STK", "ACC", "RG0", "RG1", "RG2", "RG3", "ADJ",
-                             "UP",  "RIG", "DWN", "LFT", "ANY", "NIL", "SLN"};
+                             "UP",  "RIG", "DWN", "LFT", "ANY", "NIL", "SLN", "CUR"};
     for (size_t i = 0; i < sizeof(targets) / sizeof(targets[0]); i++)
     {
         if (strcmp(str, targets[i]) == 0)
@@ -61,8 +61,8 @@ static const char *valid_opcodes[] = {"nop", "wait", "add", "sub", "mlt", "div",
                                       "put", "push", "pop", "jmp", "jez", "jnz", "jof", "halt"};
 
 static const char *valid_targets[] = {"STK", "ACC", "RG0", "RG1", "RG2", "RG3",
-                                      //"ADJ", // adj is only used internally as a target for literal values
-                                      "UP", "RIG", "DWN", "LFT", "ANY", "NIL", "SLN"};
+                                      // "ADJ", // ADJ cannot be used directly!
+                                      "UP", "RIG", "DWN", "LFT", "ANY", "NIL", "SLN", "CUR"};
 
 bool is_valid_opcode(const char *str)
 {
@@ -400,7 +400,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
 
             if (next.type == TOK_NUMBER)
             {
-                *bc_ptr++ = encode_instruction(opcode, ADJ);
+                *bc_ptr++ = encode_instruction(opcode, ADJ); // encode vale as adjacent byte
                 *bc_ptr++ = next.value & 0xff;
             }
             else if (next.type == TOK_TARGET)
