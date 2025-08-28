@@ -66,25 +66,21 @@ void prepare_slot(grid *g, const char *specification, void **out_data, u8 *out_s
         return;
     }
 
-    u8 *data = calloc(1, 1);
+    u8 *data = calloc(256, 1);
     size_t data_size = 0;
 
-    // Parse values
-    char *token = strtok(values, ",");
-    while (token)
+    if (values[0] != '=')
     {
-        u8 *new = realloc(data, data_size + 1);
-        if (!new)
+        // Parse numeric values
+        char *token = strtok(values, ",");
+        while (token)
         {
-            fprintf(stderr, "Memory allocation failed while preparing IO slot\n");
-            free(data);
-            return;
+            data[data_size++] = (u8)atoi(token);
+            token = strtok(NULL, ",");
         }
-        data = new;
-
-        data[data_size++] = (u8)atoi(token);
-        token = strtok(NULL, ",");
     }
+    else
+        data_size = 255;
 
     u8 side_num = (u8)string_to_side(side);
 
@@ -114,17 +110,17 @@ void prepare_slot(grid *g, const char *specification, void **out_data, u8 *out_s
     *out_size = (u32)data_size;
 }
 
-#define MINIMAL_ARGS 6
+#define MINIMAL_ARGS 7
 
 // Sample program: loads blocklang assembly from a file, assembles it, loads it into a grid for each block and runs it
 int main(int argc, char *argv[])
 {
     if (argc < MINIMAL_ARGS)
     {
-        printf(
-            "Usage: %s <input file> <width> <height> <debug> <ticks_limit> <{in|out}:{up|left|right|down}:slot:[value1,value2,value3]> ...\n",
-            argv[0]);
-        printf("example args: test.bl 2 2 \"in:up:0:1,2,3\" \"out:up:1:4,5,6\"\n");
+        printf("Usage: %s <input file> <width> <height> <debug> <ticks_limit> <print_strings> "
+               "<{in|out}:{up|left|right|down}:slot:{[value1,value2,value3]|=}> ...\n",
+               argv[0]);
+        printf("example args: test.bl 2 2 true 128 true \"in:up:0:1,2,3\" \"out:up:=\"\n");
         return 1;
     }
 
@@ -133,6 +129,7 @@ int main(int argc, char *argv[])
     int height = atoi(argv[3]);
     bool debug = strcmp(argv[4], "true") == 0;
     int ticks_limit = atoi(argv[5]);
+    bool print_strings = strcmp(argv[6], "true") == 0;
 
     char *source = read_asm_source_file(input_file);
     if (!source)
@@ -146,7 +143,10 @@ int main(int argc, char *argv[])
 
     if (!assemble_program(source, &bytecode, &bytecode_len))
     {
-        fprintf(stderr, "Assembly failed\n");
+        fprintf(stderr, "Assembly failed, all tokens:\n");
+
+        debug_tokenize(source);
+
         free(source);
         return 1;
     }
@@ -207,12 +207,15 @@ int main(int argc, char *argv[])
             // Print all the results
             if (sizes[i] > 0)
             {
-                printf("Results for \"%s\" \t-> ", argv[i + MINIMAL_ARGS]);
+                printf("Results for buffer %d -> ", i);
                 u8 *data = (u8 *)data_ptrs[i];
-                for (u8 j = 0; j < sizes[i]; j++)
-                {
-                    printf("%d ", data[j]);
-                }
+                if (!print_strings)
+                    for (u8 j = 0; j < sizes[i]; j++)
+                        printf("%d ", data[j]);
+                else
+                    for (u8 j = 0; j < sizes[i]; j++)
+                        printf("%c", data[j]);
+
                 printf("\n");
             }
             free(data_ptrs[i]);

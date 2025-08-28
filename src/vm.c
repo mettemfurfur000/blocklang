@@ -314,10 +314,13 @@ void block_iter_exec_op(grid *g, block *b, u8 x, u8 y)
             b->registers[i.target - RG0] = operand_value;
             break;
         case ADJ:
-            // reflection!!!!
-            ((u8 *)(b->bytecode))[b->current_instruction + 1] = operand_value;
-            advance_to++;
+            // should be illegal
+            // ((u8 *)(b->bytecode))[b->current_instruction + 1] = operand_value;
+            // advance_to++;
             break;
+        // case REF:
+        //     // illegal to write to bytecode
+        //     break;
         case NIL:
             // nothing
             break;
@@ -350,6 +353,14 @@ void block_iter_exec_op(grid *g, block *b, u8 x, u8 y)
         case ADJ:
             operand_value = ((u8 *)(b->bytecode))[b->current_instruction + 1];
             advance_to++;
+            break;
+        case REF:;
+            u8 ptr = b->accumulator;
+
+            const bool toofar = ptr > b->length;
+
+            b->last_caused_overflow = toofar ? true : false;
+            operand_value = toofar ? 0 : ((u8 *)(b->bytecode))[ptr];
             break;
         case NIL:
             operand_value = 0;
@@ -469,23 +480,27 @@ const char *target_str(u8 target)
         CASE(ANY)
         CASE(NIL)
         CASE(SLN)
+        CASE(REF)
     default:
         return "???";
     }
 }
 
-void print_block_state(block *b)
+void print_block_state(u8 x, u8 y, block *b)
 {
     if (!b->bytecode)
     {
-        printf("\t[ \t---\t ]\n");
+        printf("%2d :%2d - [ empty_block ] \n", x, y);
         return;
     }
 
     instruction i = b->bytecode ? b->bytecode[b->current_instruction] : (instruction){};
-    printf("\t[%d :\t %s-%s ]\t { trf: %d acc: %d, io: %d, put: %d, waiting: %d }\n", //
-           b->current_instruction, op_code_str(i.operation), target_str(i.target),    //
-           b->transfer_value, b->accumulator, b->waiting_for_io, b->waiting_transfer, b->waiting_ticks);
+
+    printf("x:%2d y:%2d ln:%3d [%4s %4s] ", x, y, b->current_instruction, op_code_str(i.operation),
+           target_str(i.target));
+    printf("a:%3d r0:%3d r1:%3d r2:%3d r3:%3d ", b->accumulator, b->registers[0], b->registers[1], b->registers[2],
+           b->registers[3]);
+    printf("wait:%3d\n", b->waiting_ticks);
 }
 
 /*
@@ -502,7 +517,7 @@ void grid_iterate(grid *g)
     if (g->debug)
         for (u8 y = 0; y < g->height; y++)
             for (u8 x = 0; x < g->width; x++)
-                print_block_state(&g->blocks[y * g->width + x]);
+                print_block_state(x, y, &g->blocks[y * g->width + x]);
 
     for (u8 y = 0; y < g->height; y++)
         for (u8 x = 0; x < g->width; x++)
@@ -520,6 +535,21 @@ void grid_iterate(grid *g)
 
 void run_grid(grid *g, u32 max_ticks)
 {
+    if (g->debug)
+    {
+        printf("raw bytecode:\n");
+        for (u8 y = 0; y < g->height; y++)
+            for (u8 x = 0; x < g->width; x++)
+            {
+                printf("  block %d-%d:\n", x, y);
+                block *b = &g->blocks[y * g->width + x];
+                if (!b->bytecode)
+                    printf("(no code)");
+                else
+                    for (u32 i = 0; i < b->length; i++)
+                        printf("%d : %.2X\n", i, ((u8 *)b->bytecode)[i]);
+            };
+    }
     while (true)
     {
         if (g->debug)

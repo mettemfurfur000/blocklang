@@ -14,7 +14,10 @@ typedef enum
     TOK_TARGET,
     TOK_NUMBER,
     TOK_COMMA,
+    TOK_DOT,
     TOK_COLON,
+    TOK_CHAR_LITERAL,
+    TOK_STRING,
     TOK_COMMENT
 } token_type;
 
@@ -30,13 +33,17 @@ u8 encode_instruction(int opcode, int target)
     return ((target & 0x0F) << 4) | (opcode & 0x0F);
 }
 
+static const char *valid_opcodes[] = {"nop", "wait", "add", "sub", "mlt", "div", "mod", "get",
+                                      "put", "push", "pop", "jmp", "jez", "jnz", "jof", "halt"};
+
+static const char *valid_targets[] = {"STK", "ACC", "RG0", "RG1", "RG2", "RG3", "ADJ", "UP",
+                                      "RIG", "DWN", "LFT", "ANY", "NIL", "SLN", "CUR", "REF"};
+
 int string_to_opcode(const char *str)
 {
-    const char *opcodes[] = {"nop", "wait", "add", "sub", "mlt", "div", "mod", "get",
-                             "put", "push", "pop", "jmp", "jez", "jnz", "jof", "halt"};
-    for (size_t i = 0; i < sizeof(opcodes) / sizeof(opcodes[0]); i++)
+    for (size_t i = 0; i < sizeof(valid_opcodes) / sizeof(valid_opcodes[0]); i++)
     {
-        if (strcmp(str, opcodes[i]) == 0)
+        if (strcmp(str, valid_opcodes[i]) == 0)
             return (u8)i & 0x0F;
     }
     return -1;
@@ -44,25 +51,13 @@ int string_to_opcode(const char *str)
 
 int string_to_target(const char *str)
 {
-    const char *targets[] = {"STK", "ACC", "RG0", "RG1", "RG2", "RG3", "ADJ",
-                             "UP",  "RIG", "DWN", "LFT", "ANY", "NIL", "SLN", "CUR"};
-    for (size_t i = 0; i < sizeof(targets) / sizeof(targets[0]); i++)
+    for (size_t i = 0; i < sizeof(valid_targets) / sizeof(valid_targets[0]); i++)
     {
-        if (strcmp(str, targets[i]) == 0)
+        if (strcmp(str, valid_targets[i]) == 0)
             return (u8)i & 0x0F;
     }
     return -1;
 }
-
-static token unknown_identifiers[256] = {};
-static int total_unknown = 0;
-
-static const char *valid_opcodes[] = {"nop", "wait", "add", "sub", "mlt", "div", "mod", "get",
-                                      "put", "push", "pop", "jmp", "jez", "jnz", "jof", "halt"};
-
-static const char *valid_targets[] = {"STK", "ACC", "RG0", "RG1", "RG2", "RG3",
-                                      // "ADJ", // ADJ cannot be used directly!
-                                      "UP", "RIG", "DWN", "LFT", "ANY", "NIL", "SLN", "CUR"};
 
 bool is_valid_opcode(const char *str)
 {
@@ -153,8 +148,7 @@ token next_token(const char **src)
             }
 
             // Unknown identifier
-            unknown_identifiers[total_unknown++] = tok;
-            tok.type = TOK_LABEL; // treat as label for now
+            tok.type = TOK_LABEL; // treat as a label for now
         }
 
         *src = s;
@@ -186,6 +180,14 @@ token next_token(const char **src)
 
     // Handle single character tokens
 
+    if (*s == '.')
+    {
+        tok.type = TOK_DOT;
+        s++;
+        *src = s;
+        return tok;
+    }
+
     if (*s == ',')
     {
         tok.type = TOK_COMMA;
@@ -198,6 +200,95 @@ token next_token(const char **src)
     {
         tok.type = TOK_COLON;
         s++;
+        *src = s;
+        return tok;
+    }
+
+    // Handle character literals
+
+    if (*s == '\'')
+    {
+        tok.type = TOK_CHAR_LITERAL;
+        s++;            // first literal
+        if (*s == '\\') // escape sequence
+        {
+            s++; // char after backslash
+            switch (*s)
+            {
+            case 'a':
+                tok.text[0] = 0x07;
+                break;
+            case 'b':
+                tok.text[0] = 0x08;
+                break;
+            case 'e':
+                tok.text[0] = 0x1b;
+                break;
+            case 'f':
+                tok.text[0] = 0x0c;
+                break;
+            case 'n':
+                tok.text[0] = 0x0a;
+                break;
+            case 'r':
+                tok.text[0] = 0x0d;
+                break;
+            case 't':
+                tok.text[0] = 0x09;
+                break;
+            case 'v':
+                tok.text[0] = 0x0B;
+                break;
+            case '\\':
+                tok.text[0] = '\\';
+                break;
+            case '\'':
+                tok.text[0] = '\'';
+                break;
+            case '\"':
+                tok.text[0] = '\"';
+                break;
+            case '?':
+                tok.text[0] = '\?';
+                break;
+            default:
+                fprintf(stderr, "Unknown escape sequence symbol: \"%c\" at position %d\n", *s, (int)(s - *src));
+                exit(1);
+            }
+        }
+        else // a character
+            tok.text[0] = *s;
+
+        tok.text[1] = '\0';
+
+        s++; // single quote?
+        if (*s != '\'')
+        {
+            fprintf(stderr, "Missing terminating character: \"\'\" at position %d\n", (int)(s - *src));
+            exit(1);
+        }
+        s++; // next token
+
+        *src = s;
+        return tok;
+    }
+
+    // Strings
+
+    if (*s == '\"')
+    {
+        s++;
+        tok.type = TOK_STRING;
+        const char *start = s;
+        while (*s != '\"' && *s != '\0')
+            s++;
+        size_t len = s - start;
+        if (len >= sizeof(tok.text))
+            len = sizeof(tok.text) - 1;
+        strncpy(tok.text, start, len);
+        tok.text[len] = '\0';
+        s++;
+
         *src = s;
         return tok;
     }
@@ -265,14 +356,11 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
                 // labels[total_labels].address = program_length + 1;
                 labels[total_labels].address = program_length;
                 total_labels++;
-
-                // Labels require extra byte to be stored in bytecode
-                // program_length++;
             }
         }
         else if (tok.type == TOK_OPCODE)
         {
-            program_length++; // opcode + (target | label | number | none )
+            program_length++;
 
             if (strcmp(tok.text, "halt") == 0 || strcmp(tok.text, "nop") == 0)
             {
@@ -281,6 +369,8 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
             }
 
             token next = next_token(&s);
+
+            // opcodes take (target | label | number | char literal | none ), depending on opcodes
 
             if (strcmp(tok.text, "jmp") == 0 || strcmp(tok.text, "jez") == 0 || strcmp(tok.text, "jnz") == 0 ||
                 strcmp(tok.text, "jof") == 0)
@@ -294,15 +384,17 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
 
                 if (next.type == TOK_NUMBER || next.type == TOK_LABEL)
                 {
-                    // Labels and numbers in from of a jump require extra byte to be stored in bytecode
+                    // Labels and numbers in front of a jump opcode require an extra byte to be stored in bytecode
                     program_length++;
                 }
+
+                continue;
             }
-            // the rest of the instructions expect a target/number here
-            else if (next.type == TOK_NUMBER)
+
+            // the rest of possible arguments
+            if (next.type == TOK_NUMBER || next.type == TOK_CHAR_LITERAL || next.type == TOK_LABEL)
             {
-                // numbers require an extra byte
-                program_length++;
+                program_length++; // numbers, literals and labels take extra byte and an ADJ target later
             }
             else if (next.type != TOK_TARGET)
             {
@@ -313,6 +405,19 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
         else if (tok.type == TOK_COMMENT)
         {
             // Ignore comments
+        }
+        else if (tok.type == TOK_DOT)
+        {
+            // Dots followed by a string will be copied to bytecode as-is (including \0)
+            token next = next_token(&s);
+
+            if (next.type != TOK_STRING)
+            {
+                fprintf(stderr, "Expected a string after a dot, got [%s]\n", next.text);
+                return false;
+            }
+
+            program_length += strlen(next.text) + 1;
         }
         else
         {
@@ -341,10 +446,36 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
         {
             // Ignore labels in second pass
         }
+        else if (tok.type == TOK_DOT)
+        {
+            // Dots followed by a string will be copied to bytecode as-is (including \0)
+            token next = next_token(&s);
+
+            if (next.type == TOK_STRING)
+            {
+                const u32 len = strlen(next.text) + 1;
+
+                for (u32 i = 0; i < len; i++)
+                {
+                    *bc_ptr++ = next.text[i];
+                }
+            }
+            else
+            {
+                fprintf(stderr, "Expected a string after a dot, got [%s]\n", next.text);
+                return false;
+            }
+        }
         else if (tok.type == TOK_OPCODE)
         {
             // Generate bytecode for opcode
             int opcode = string_to_opcode(tok.text);
+
+            if (opcode == ADJ)
+            {
+                fprintf(stderr, "Cannot use ADJ directly\n");
+                return false;
+            }
 
             if (opcode == HALT || opcode == NOP)
             {
@@ -370,7 +501,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
                     }
 
                     *bc_ptr++ = encode_instruction(opcode, ADJ); // use ADJ as a special target for labels
-                    *bc_ptr++ = label_address;                   // write label address
+                    *bc_ptr++ = (u8)label_address;               // write label address
                 }
                 else if (next.type == TOK_NUMBER)
                 {
@@ -396,9 +527,29 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
                 continue;
             }
 
-            // the rest of the instructions expect a target/number here
+            // the rest of the instructions can take a target/number/label/char literal here
 
-            if (next.type == TOK_NUMBER)
+            if (next.type == TOK_CHAR_LITERAL)
+            {
+                *bc_ptr++ = encode_instruction(opcode, ADJ);
+                *bc_ptr++ = next.text[0];
+            }
+            else if (next.type == TOK_LABEL)
+            {
+                *bc_ptr++ = encode_instruction(opcode, ADJ);
+
+                // Lookup label address
+                int label_address = get_label_address(labels, total_labels, next.text);
+
+                if (label_address == -1)
+                {
+                    fprintf(stderr, "Undefined label [%s] for opcode [%s]\n", next.text, tok.text);
+                    return false;
+                }
+
+                *bc_ptr++ = (u8)label_address;
+            }
+            else if (next.type == TOK_NUMBER)
             {
                 *bc_ptr++ = encode_instruction(opcode, ADJ); // encode vale as adjacent byte
                 *bc_ptr++ = next.value & 0xff;
@@ -416,14 +567,15 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
             }
             else
             {
-                fprintf(stderr, "Expected a target or a number after opcode [%s], got [%s]\n", tok.text, next.text);
+                fprintf(stderr, "Expected a target, number, label, or a literal after opcode [%s], got [%s]\n",
+                        tok.text, next.text);
                 free(bytecode);
                 return false;
             }
         }
         else
         {
-            fprintf(stderr, "Impossible: %d - %s", tok.type, tok.text);
+            fprintf(stderr, "Unexpected token id %d, text:[%s]\n", tok.type, tok.text);
             exit(-1);
             // assert(false && "Unreachable - invalid token");
         }
@@ -439,8 +591,20 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
     if (out_len)
         *out_len = program_length;
 
-    // Clear unknown identifiers for next assembly
-    total_unknown = 0;
-
     return true;
+}
+
+// Prints all tokens in said string
+void debug_tokenize(const char *src)
+{
+    const char *s = src;
+
+    while (true)
+    {
+        token tok = next_token(&s);
+        if (tok.type == TOK_EOF)
+            break;
+
+        printf("%lld: %d - [%s]\n", s - src, tok.type, tok.text);
+    }
 }

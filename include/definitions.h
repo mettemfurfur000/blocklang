@@ -53,11 +53,12 @@ typedef enum
     // other
     NIL, // always zero, if chosen as destination, consumes input
     SLN, // represents the number of elements on the stack
-    CUR, // represents instruction counter
-    LAST // unused target!
+    CUR, // represents current address of an instruction
+    REF, // represents a byte that is located in bytecode dictated at ACC offset
+    TARGET_GUARD_LAST
 } targets;
 
-static_assert(LAST <= 15, "");
+static_assert(TARGET_GUARD_LAST <= 16, "");
 
 // only 1 target is supported at the moment
 
@@ -78,15 +79,17 @@ typedef enum
     PUSH, // from target push to stack
     POP,  // from stack pop to target
     // control
-    JMP, // from target - jump to said position in a program
-    JEZ, // from target - jump if ACC equals zero
-    JNZ, // from target - jump if ACC not zero
-    JOF, // from target - jump if last arithmetic operation caused an overflow or underflow
+    JMP, // jump to said position in a program (if:)
+    JEZ, // jump if ACC equals zero
+    JNZ, // jump if ACC is not zero
+    JOF, // jump if last operation caused an overflow or underflow
 
     HALT, // stops execution
+
+    OP_GUARD_LAST
 } operations;
 
-static_assert(HALT <= 15, "");
+static_assert(OP_GUARD_LAST <= 16, "");
 
 typedef struct
 {
@@ -147,6 +150,10 @@ void load_program(grid *g, u8 x, u8 y, const void *bytecode, u8 length);
 
 void run_grid(grid *g, u32 max_ticks);
 void free_grid(grid *g);
+
+// Debug tokenizer
+
+void debug_tokenize(const char* src);
 
 // Assembler
 
