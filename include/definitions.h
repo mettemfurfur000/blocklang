@@ -99,6 +99,8 @@ typedef struct
 
 static_assert(sizeof(instruction) == 1, "");
 
+#define BYTECODE_LIMIT (u8) - 1
+
 typedef struct
 {
     const instruction *bytecode; // reference to a program in bytecode somewhere in teh code
@@ -140,7 +142,7 @@ typedef struct
     u32 ticks;
 } grid;
 
-grid initialize_grid(u8 w, u8 h);
+grid *initialize_grid(u8 w, u8 h);
 
 u16 io_slot_offset(grid *g, u8 side, u8 slot);
 
@@ -153,7 +155,7 @@ void free_grid(grid *g);
 
 // Debug tokenizer
 
-void debug_tokenize(const char* src);
+void debug_tokenize(const char *src);
 
 // Assembler
 

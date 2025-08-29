@@ -5,23 +5,27 @@
 
 #include "../include/definitions.h"
 
-grid initialize_grid(u8 w, u8 h)
+grid *initialize_grid(u8 w, u8 h)
 {
-    grid g = {};
+    grid *g = calloc(1, sizeof(grid));
+
+    assert(g != 0);
+    assert(w != 0);
+    assert(h != 0);
 
     u16 total_blocks = w * h;
-    u16 edge_length = (w + h) * 2; // amount of possible imputs and outputs
+    u16 edge_length = (w + h) * 2;
 
-    g.width = w;
-    g.height = h;
-    g.total_blocks = total_blocks;
-    g.perimeter = edge_length;
+    g->width = w;
+    g->height = h;
+    g->total_blocks = total_blocks;
+    g->perimeter = edge_length;
 
-    g.blocks = calloc(total_blocks, sizeof(block));
-    assert(g.blocks);
+    g->blocks = calloc(total_blocks, sizeof(block));
+    g->slots = calloc(edge_length, sizeof(io_slot));
 
-    g.slots = calloc(edge_length, sizeof(io_slot));
-    assert(g.slots);
+    assert(g->blocks != NULL);
+    assert(g->slots != NULL);
 
     return g;
 }
@@ -30,13 +34,11 @@ void free_grid(grid *g)
 {
     free(g->blocks);
     free(g->slots);
-
-    memset(g, 0, sizeof(grid));
+    free(g);
 }
 
 u16 io_slot_offset(grid *g, u8 side, u8 slot)
 {
-    // only 4
     assert(side < 4);
 
     if (side == up || side == down)
@@ -44,7 +46,6 @@ u16 io_slot_offset(grid *g, u8 side, u8 slot)
     else
         assert(slot < g->height);
 
-    // limit to availabl amount of slots on said side
     slot = (side == up || side == down) ? slot % g->width : slot % g->height;
 
     u16 offset = 0;

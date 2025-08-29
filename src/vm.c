@@ -53,13 +53,11 @@ void block_io_unlock_error(block *b)
 
 bool can_read(io_slot *slot)
 {
-    // reading is performed from 0 to len - 1
     return slot->ptr && slot->read_only && slot->cur < slot->len;
 }
 
 bool can_write(io_slot *slot)
 {
-    // writing is from 0 to len -1
     return slot->ptr && !slot->read_only && slot->cur < slot->len;
 }
 
@@ -550,6 +548,7 @@ void run_grid(grid *g, u32 max_ticks)
                         printf("%d : %.2X\n", i, ((u8 *)b->bytecode)[i]);
             };
     }
+
     while (true)
     {
         if (g->debug)

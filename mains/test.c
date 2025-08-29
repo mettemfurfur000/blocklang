@@ -5,30 +5,7 @@
 #include <string.h>
 
 #include "../include/definitions.h"
-
-char *read_asm_source_file(const char *filename)
-{
-    FILE *file = fopen(filename, "r");
-    if (!file)
-        return NULL;
-
-    fseek(file, 0, SEEK_END);
-    long filesize = ftell(file);
-    fseek(file, 0, SEEK_SET);
-
-    char *buffer = calloc(filesize + 1, 1);
-    if (!buffer)
-    {
-        fclose(file);
-        return NULL;
-    }
-
-    fread(buffer, 1, filesize, file);
-    buffer[filesize] = '\0';
-
-    fclose(file);
-    return buffer;
-}
+#include "../include/utils.h"
 
 u8 string_to_side(const char *str)
 {
@@ -67,6 +44,12 @@ void prepare_slot(grid *g, const char *specification, void **out_data, u8 *out_s
     }
 
     u8 *data = calloc(256, 1);
+    if (!data)
+    {
+        fprintf(stderr, "Allocation failed\n");
+        abort();
+    }
+
     size_t data_size = 0;
 
     if (values[0] != '=')
@@ -131,7 +114,7 @@ int main(int argc, char *argv[])
     int ticks_limit = atoi(argv[5]);
     bool print_strings = strcmp(argv[6], "true") == 0;
 
-    char *source = read_asm_source_file(input_file);
+    char *source = read_to_heap(input_file);
     if (!source)
     {
         fprintf(stderr, "Failed to read source file: %s\n", input_file);
@@ -153,9 +136,9 @@ int main(int argc, char *argv[])
 
     free(source);
 
-    grid g = initialize_grid(width, height);
+    grid *g = initialize_grid(width, height);
 
-    g.debug = debug;
+    g->debug = debug;
 
     // Prepare IO slots based on command line arguments
     void **data_ptrs = NULL;
@@ -169,7 +152,7 @@ int main(int argc, char *argv[])
         {
             fprintf(stderr, "Memory allocation failed for IO data pointers\n");
             free(bytecode);
-            free_grid(&g);
+            free_grid(g);
             if (data_ptrs)
                 free(data_ptrs);
             if (sizes)
@@ -181,7 +164,7 @@ int main(int argc, char *argv[])
         {
             void *data = NULL;
             u8 size = 0;
-            prepare_slot(&g, argv[i], &data, &size);
+            prepare_slot(g, argv[i], &data, &size);
             // data is owned by the grid now
             data_ptrs[i - MINIMAL_ARGS] = data;
             sizes[i - MINIMAL_ARGS] = size;
@@ -189,16 +172,16 @@ int main(int argc, char *argv[])
         }
     }
 
-    for (u8 y = 0; y < g.height; y++)
-        for (u8 x = 0; x < g.width; x++)
+    for (u8 y = 0; y < g->height; y++)
+        for (u8 x = 0; x < g->width; x++)
         {
-            load_program(&g, x, y, bytecode, bytecode_len);
+            load_program(g, x, y, bytecode, bytecode_len);
         }
 
-    run_grid(&g, ticks_limit);
+    run_grid(g, ticks_limit);
 
     free(bytecode);
-    free_grid(&g);
+    free_grid(g);
 
     if (data_ptrs)
     {
