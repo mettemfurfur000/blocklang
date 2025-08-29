@@ -17,7 +17,7 @@ func_add:
     pop RG3     ; pop return addr to reg 3
 
     pop RG0     ; second arg to reg 0
-    pop ACC     ; second arg to acc
+    pop ACC     ; first arg to acc
 
     add RG0     ; add 2 together
     put RG0     ; put result to reg 0

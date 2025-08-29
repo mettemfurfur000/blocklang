@@ -31,7 +31,7 @@ char *read_to_heap_bin(const char *filename, long *out_len)
 {
     if (!out_len || !filename)
         return NULL;
-    FILE *file = fopen(filename, "r");
+    FILE *file = fopen(filename, "rb");
     if (!file)
         return NULL;
 

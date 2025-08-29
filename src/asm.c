@@ -183,12 +183,6 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
             // Generate bytecode for opcode
             int opcode = string_to_opcode(tok.text);
 
-            if (opcode == ADJ)
-            {
-                fprintf(stderr, "Cannot use ADJ directly\n");
-                return false;
-            }
-
             if (opcode == HALT || opcode == NOP)
             {
                 // No operand here

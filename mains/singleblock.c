@@ -12,8 +12,7 @@
     Single block vm, with stdin attached at the top and stdout at the bottom
 */
 
-#define TICK_LIMIT 4096
-#define LOOPS_CONSIDERED_INFINITE 8
+#define TICK_LIMIT 1024 * 16
 
 int main(int argc, char *argv[])
 {
@@ -71,6 +70,7 @@ int main(int argc, char *argv[])
     load_program(g, 0, 0, bytecode, len);
 
     printf("/quit to exit\n");
+    printf("/debug to toggle debug output\n");
 
     for (;;)
     {
@@ -79,20 +79,17 @@ int main(int argc, char *argv[])
 
         if (strncmp((void *)in_buffer, "/quit", 5) == 0)
             break;
-
-        for (u32 i = 0; i < LOOPS_CONSIDERED_INFINITE; i++)
+        if (strncmp((void *)in_buffer, "/debug", 5) == 0)
         {
-            run_grid(g, TICK_LIMIT);
-
-            if (g->ticks >= TICK_LIMIT)
-                printf("Ticking for %d ticks, loop %d...\n", TICK_LIMIT, i);
-            else
-                break;
+            g->debug = !g->debug;
+            continue;
         }
+
+        run_grid(g, TICK_LIMIT);
 
         if (g->ticks >= TICK_LIMIT)
         {
-            printf("Grid seems to be stuck, aborting\n");
+            printf("Grid ticked for %d ticks, aborting\n", g->ticks);
             printf("Current output: %.255s\n", out_buffer);
             abort();
         }
@@ -108,6 +105,7 @@ int main(int argc, char *argv[])
         g->ticks = 0;
     }
 
+    free(bytecode);
     free_grid(g);
 
     return 0;

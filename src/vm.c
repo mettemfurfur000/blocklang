@@ -378,25 +378,25 @@ void block_iter_exec_op(grid *g, block *b, u8 x, u8 y)
             break;
         case ADD:
             b->last_caused_overflow = b->accumulator + operand_value > 255;
-            b->accumulator += operand_value;
+            b->accumulator = b->accumulator + operand_value;
             break;
         case SUB:
             b->last_caused_overflow = b->accumulator - operand_value < 0;
-            b->accumulator -= operand_value;
+            b->accumulator = b->accumulator - operand_value;
             break;
         case MLT:
             b->last_caused_overflow = b->accumulator * operand_value > 255;
-            b->accumulator -= operand_value;
+            b->accumulator = b->accumulator * operand_value;
             break;
         case DIV:
             b->last_caused_overflow = operand_value == 0;
             if (operand_value != 0)
-                b->accumulator /= operand_value;
+                b->accumulator = b->accumulator / operand_value;
             break;
         case MOD:
             b->last_caused_overflow = operand_value == 0;
             if (operand_value != 0)
-                b->accumulator %= operand_value;
+                b->accumulator = b->accumulator % operand_value;
             break;
         case GET:
             b->accumulator = operand_value;
@@ -478,6 +478,7 @@ const char *target_str(u8 target)
         CASE(ANY)
         CASE(NIL)
         CASE(SLN)
+        CASE(CUR)
         CASE(REF)
     default:
         return "???";

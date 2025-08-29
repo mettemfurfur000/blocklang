@@ -33,24 +33,18 @@ typedef enum
 // possible targets of an operation:
 typedef enum
 {
-    // current stack up value, if nothing was pushed to it, equals to zero
-    STK,
-    // block accumulator
-    ACC,
-    // general registers
-    RG0,
+    STK, // current stack up value, if nothing was pushed to it, equals to zero
+    ACC, // block accumulator
+    RG0, // general registers
     RG1,
     RG2,
     RG3,
-    // represents next byte in a program, read only, and program counter will skip next byte automaticaly
-    ADJ,
-    // values from/to neighboring blocks / slots
+    ADJ, // represents next byte in a program, read only, and program counter will skip next byte automaticaly
     UP,  // up block / slot
     RIG, // right block / slot
     DWN, // down block / slot
     LFT, // left block / slot
     ANY, // to anyone ready to perform an transfer
-    // other
     NIL, // always zero, if chosen as destination, consumes input
     SLN, // represents the number of elements on the stack
     CUR, // represents current address of an instruction
@@ -67,25 +61,20 @@ typedef enum
 {
     NOP,  // does nothing, but spends a tick
     WAIT, // from target - wait for ticks
-    // arithmetic
     ADD, // from target - add to ACC
     SUB, // from target - sub from ACC
     MLT, // from target - mult ACC by target
     DIV, // from target - divide ACC by target
     MOD, // from target - get remainder of a division
-    // memory
     GET,  // from target to ACC
     PUT,  // from ACC to target
     PUSH, // from target push to stack
     POP,  // from stack pop to target
-    // control
     JMP, // jump to said position in a program (if:)
     JEZ, // jump if ACC equals zero
     JNZ, // jump if ACC is not zero
     JOF, // jump if last operation caused an overflow or underflow
-
     HALT, // stops execution
-
     OP_GUARD_LAST
 } operations;
 
