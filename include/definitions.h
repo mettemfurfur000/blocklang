@@ -150,4 +150,8 @@ void debug_tokenize(const char *src);
 
 bool assemble_program(const char *source, void **dest, u8 *out_len);
 
+#define CASE(x)                                                                                                        \
+    case x:                                                                                                            \
+        return #x;
+
 #endif

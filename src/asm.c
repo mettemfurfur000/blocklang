@@ -9,18 +9,69 @@
 
 typedef struct
 {
-    char name[32];
+    char name[64];
     u8 address;
+    u16 line;
+    bool was_used;
 } label_entry;
+
+const char *tok_to_str(token_type t)
+{
+    switch (t)
+    {
+        CASE(TOK_EOF)
+        CASE(TOK_LABEL)
+        CASE(TOK_OPCODE)
+        CASE(TOK_TARGET)
+        CASE(TOK_NUMBER)
+        CASE(TOK_COMMA)
+        CASE(TOK_DOT)
+        CASE(TOK_COLON)
+        CASE(TOK_CHAR_LITERAL)
+        CASE(TOK_STRING)
+        CASE(TOK_BRACKET_LEFT)
+        CASE(TOK_BRACKET_RIGHT)
+        CASE(TOK_SQUARE_BRACKET_LEFT)
+        CASE(TOK_SQUARE_BRACKET_RIGHT)
+        CASE(TOK_CURLY_BRACKET_LEFT)
+        CASE(TOK_CURLY_BRACKET_RIGHT)
+        CASE(TOK_PLUS)
+        CASE(TOK_MINUS)
+        CASE(TOK_ASTERISK)
+        CASE(TOK_FORWARDSLASH)
+        CASE(TOK_EXCLAMATION_MARK)
+        CASE(TOK_AT)
+        CASE(TOK_HASHTAG)
+        CASE(TOK_DOLLARSIGN)
+        CASE(TOK_PERCENT)
+        CASE(TOK_CARET)
+        CASE(TOK_AMPERSAND)
+        CASE(TOK_QUESTION_MARK)
+        CASE(TOK_TILDA)
+        CASE(TOK_COMMENT)
+    default:
+        return "Unknown token";
+    }
+}
 
 int get_label_address(label_entry labels[], int total_labels, const char *label)
 {
     for (int i = 0; i < total_labels; i++)
     {
         if (strcmp(labels[i].name, label) == 0)
+        {
+            labels[i].was_used = true;
             return labels[i].address;
+        }
     }
     return -1; // Label not found
+}
+
+void look_for_unused_labels(label_entry labels[], int total_labels)
+{
+    for (int i = 0; i < total_labels; i++)
+        if (labels[i].was_used == false)
+            fprintf(stderr, "Line %d: Warning - unused label %s\n", labels[i].line, labels[i].name);
 }
 
 bool assemble_program(const char *source, void **dest, u8 *out_len)
@@ -35,10 +86,11 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
 
     label_entry labels[256] = {};
     int total_labels = 0;
+    int cur_line = 1;
 
     while (true)
     {
-        token tok = next_token(&s);
+        token tok = next_token(&s, &cur_line);
         if (tok.type == TOK_EOF)
             break;
 
@@ -58,9 +110,16 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
 
             if (!found)
             {
+                if (strlen(tok.text) > sizeof(labels[total_labels].name))
+                {
+                    fprintf(stderr, "Line %d: label cannot be longer than %lld bytes long\n", cur_line,
+                            sizeof(labels[total_labels].name));
+                    exit(-1);
+                }
                 strncpy(labels[total_labels].name, tok.text, sizeof(labels[total_labels].name));
                 // labels[total_labels].address = program_length + 1;
                 labels[total_labels].address = program_length;
+                labels[total_labels].line = cur_line;
                 total_labels++;
             }
         }
@@ -74,7 +133,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
                 continue;
             }
 
-            token next = next_token(&s);
+            token next = next_token(&s, &cur_line);
 
             // opcodes take (target | label | number | char literal | none ), depending on opcodes
 
@@ -83,8 +142,8 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
             {
                 if (next.type != TOK_LABEL && next.type != TOK_NUMBER && next.type != TOK_TARGET)
                 {
-                    fprintf(stderr, "Expected a label, number or a target after jump opcode [%s], got [%s]\n", tok.text,
-                            next.text);
+                    fprintf(stderr, "Line %d: Expected a label, number or a target after jump opcode [%s], got [%s]\n",
+                            cur_line, tok.text, next.text);
                     return false;
                 }
 
@@ -104,7 +163,8 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
             }
             else if (next.type != TOK_TARGET)
             {
-                fprintf(stderr, "Expected a target or a number after opcode [%s], got [%s]\n", tok.text, next.text);
+                fprintf(stderr, "Line %d: Expected a target or a number after opcode [%s], got [%s]\n", cur_line,
+                        tok.text, next.text);
                 return false;
             }
         }
@@ -115,11 +175,11 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
         else if (tok.type == TOK_DOT)
         {
             // Dots followed by a string will be copied to bytecode as-is (including \0)
-            token next = next_token(&s);
+            token next = next_token(&s, &cur_line);
 
             if (next.type != TOK_STRING)
             {
-                fprintf(stderr, "Expected a string after a dot, got [%s]\n", next.text);
+                fprintf(stderr, "Line %d: Expected a string after a dot, got [%s]\n", cur_line, next.text);
                 return false;
             }
 
@@ -127,14 +187,14 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
         }
         else
         {
-            fprintf(stderr, "Unexpected token type %d\n", tok.type);
+            fprintf(stderr, "Line %d: Unexpected token type %d\n", cur_line, tok.type);
             return false;
         }
     }
 
     if (program_length > BYTECODE_LIMIT)
     {
-        fprintf(stderr, "Bytecode length exceeds the limit of %d bytes\n", BYTECODE_LIMIT);
+        fprintf(stderr, "Line %d: Bytecode length exceeds the limit of %d bytes\n", cur_line, BYTECODE_LIMIT);
         return false;
     }
 
@@ -149,9 +209,11 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
 
     u8 *bc_ptr = bytecode;
 
+    cur_line = 1;
+
     while (true)
     {
-        token tok = next_token(&s);
+        token tok = next_token(&s, &cur_line);
         if (tok.type == TOK_EOF)
             break;
         else if (tok.type == TOK_LABEL || tok.type == TOK_COMMENT)
@@ -161,7 +223,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
         else if (tok.type == TOK_DOT)
         {
             // Dots followed by a string will be copied to bytecode as-is (including \0)
-            token next = next_token(&s);
+            token next = next_token(&s, &cur_line);
 
             if (next.type == TOK_STRING)
             {
@@ -174,7 +236,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
             }
             else
             {
-                fprintf(stderr, "Expected a string after a dot, got [%s]\n", next.text);
+                fprintf(stderr, "Line %d: Expected a string after a dot, got [%s]\n", cur_line, next.text);
                 return false;
             }
         }
@@ -190,7 +252,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
                 continue;
             }
 
-            token next = next_token(&s); // Get the next token
+            token next = next_token(&s, &cur_line); // Get the next token
 
             if (opcode == JMP || opcode == JEZ || opcode == JNZ ||
                 opcode == JOF) // jumps can accept labels, numbers, targets
@@ -202,7 +264,8 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
 
                     if (label_address == -1)
                     {
-                        fprintf(stderr, "Undefined label [%s] after jump opcode [%s]\n", next.text, tok.text);
+                        fprintf(stderr, "Line %d: Undefined label [%s] after jump opcode [%s]\n", cur_line, next.text,
+                                tok.text);
                         return false;
                     }
 
@@ -212,7 +275,9 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
                 else if (next.type == TOK_NUMBER)
                 {
                     *bc_ptr++ = encode_instruction(opcode, ADJ);
-                    *bc_ptr++ = next.value;
+                    if (next.value > 0xff)
+                        fprintf(stderr, "Line %d: Warning - number will not fit in a byte: %d\n", cur_line, next.value);
+                    *bc_ptr++ = next.value & 0xff;
                 }
                 else if (next.type == TOK_TARGET)
                 {
@@ -220,7 +285,8 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
 
                     if (target == -1)
                     {
-                        assert(false && "Unreachable - target validity already checked");
+                        fprintf(stderr, "Line %d: Unreachable - target validity already checked", cur_line);
+                        exit(-1);
                     }
 
                     *bc_ptr++ = encode_instruction(opcode, target);
@@ -249,7 +315,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
 
                 if (label_address == -1)
                 {
-                    fprintf(stderr, "Undefined label [%s] for opcode [%s]\n", next.text, tok.text);
+                    fprintf(stderr, "Line %d: Undefined label [%s] for opcode [%s]\n", cur_line, next.text, tok.text);
                     return false;
                 }
 
@@ -258,6 +324,9 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
             else if (next.type == TOK_NUMBER)
             {
                 *bc_ptr++ = encode_instruction(opcode, ADJ); // encode vale as adjacent byte
+                if (next.value > 0xff)
+                    fprintf(stderr, "Line %d: Warning - number will not fit in a byte in front of an ADJ: %d\n",
+                            cur_line, next.value);
                 *bc_ptr++ = next.value & 0xff;
             }
             else if (next.type == TOK_TARGET)
@@ -273,19 +342,21 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
             }
             else
             {
-                fprintf(stderr, "Expected a target, number, label, or a literal after opcode [%s], got [%s]\n",
-                        tok.text, next.text);
+                fprintf(stderr, "Line %d: Expected a target, number, label, or a literal after opcode [%s], got [%s]\n",
+                        cur_line, tok.text, next.text);
                 free(bytecode);
                 return false;
             }
         }
         else
         {
-            fprintf(stderr, "Unexpected token id %d, text:[%s]\n", tok.type, tok.text);
+            fprintf(stderr, "Line %d: Unexpected token id %d, text:[%s]\n", cur_line, tok.type, tok.text);
             exit(-1);
             // assert(false && "Unreachable - invalid token");
         }
     }
+
+    look_for_unused_labels(labels, total_labels);
 
     // Output results
 
@@ -307,10 +378,10 @@ void debug_tokenize(const char *src)
 
     while (true)
     {
-        token tok = next_token(&s);
+        token tok = next_token(&s, NULL);
         if (tok.type == TOK_EOF)
             break;
 
-        printf("%lld: %d - [%s]\n", s - src, tok.type, tok.text);
+        printf("%lld:\t[%s]:\t%s\n", s - src, tok_to_str(tok.type), tok.text);
     }
 }

@@ -429,10 +429,6 @@ void block_iter_exec_op(const grid *g, block *b, u8 x, u8 y)
     b->current_instruction = advance_to >= b->length ? b->length - 1 : advance_to;
 }
 
-#define CASE(x)                                                                                                        \
-    case x:                                                                                                            \
-        return #x;
-
 const char *op_code_str(u8 opcode)
 {
     switch (opcode)

@@ -53,15 +53,32 @@ bool is_valid_target(const char *str)
     return false;
 }
 
+#define HANDLE_SINGLE(src, s, symbol, tok_type)                                                                        \
+    if (*(s) == symbol)                                                                                                \
+    {                                                                                                                  \
+        tok.type = tok_type;                                                                                           \
+        s++;                                                                                                           \
+        *src = s;                                                                                                      \
+        return tok;                                                                                                    \
+    }
+
 // Advances the source pointer and returns the next token
-token next_token(const char **src)
+token next_token(const char **src, int *lines_ret)
 {
+    assert(src);
+    int __ = 0;
+    if (!lines_ret)
+        lines_ret = &__;
+
     token tok = {0};
     const char *s = *src;
 
     // Skip whitespace and newlines
-    while (*s == ' ' || *s == '\t' || *s == '\n' || *s == '\r')
+    while (*s == ' ' || *s == '\t' || *s == '\f' || *s == '\v' || *s == '\n' || *s == '\r')
+    {
+        *lines_ret += (*s == '\n' || *s == '\r') ? 1 : 0;
         s++;
+    }
 
     if (*s == '\0')
     {
@@ -79,7 +96,10 @@ token next_token(const char **src)
             s++;
         size_t len = s - start;
         if (len >= sizeof(tok.text))
+        {
+            fprintf(stderr, "Warning: token is too ling: %s\n", tok.text);
             len = sizeof(tok.text) - 1;
+        }
         strncpy(tok.text, start, len);
         tok.text[len] = '\0';
         *src = s;
@@ -94,7 +114,10 @@ token next_token(const char **src)
             s++;
         size_t len = s - start;
         if (len >= sizeof(tok.text))
+        {
+            fprintf(stderr, "Warning: token is too ling: %s\n", tok.text);
             len = sizeof(tok.text) - 1;
+        }
         strncpy(tok.text, start, len);
         tok.text[len] = '\0';
 
@@ -154,29 +177,33 @@ token next_token(const char **src)
 
     // Handle single character tokens
 
-    if (*s == '.')
-    {
-        tok.type = TOK_DOT;
-        s++;
-        *src = s;
-        return tok;
-    }
+    HANDLE_SINGLE(src, s, '.', TOK_DOT);
+    HANDLE_SINGLE(src, s, ',', TOK_COMMA);
+    HANDLE_SINGLE(src, s, ':', TOK_COLON);
 
-    if (*s == ',')
-    {
-        tok.type = TOK_COMMA;
-        s++;
-        *src = s;
-        return tok;
-    }
+    HANDLE_SINGLE(src, s, '(', TOK_BRACKET_LEFT);
+    HANDLE_SINGLE(src, s, ')', TOK_BRACKET_RIGHT);
+    HANDLE_SINGLE(src, s, '[', TOK_SQUARE_BRACKET_LEFT);
+    HANDLE_SINGLE(src, s, ']', TOK_SQUARE_BRACKET_RIGHT);
+    HANDLE_SINGLE(src, s, '{', TOK_CURLY_BRACKET_LEFT);
+    HANDLE_SINGLE(src, s, '}', TOK_CURLY_BRACKET_RIGHT);
 
-    if (*s == ':')
-    {
-        tok.type = TOK_COLON;
-        s++;
-        *src = s;
-        return tok;
-    }
+    HANDLE_SINGLE(src, s, '+', TOK_PLUS);
+    HANDLE_SINGLE(src, s, '-', TOK_MINUS);
+    HANDLE_SINGLE(src, s, '*', TOK_ASTERISK);
+    HANDLE_SINGLE(src, s, '/', TOK_FORWARDSLASH);
+
+    HANDLE_SINGLE(src, s, '!', TOK_EXCLAMATION_MARK);
+    HANDLE_SINGLE(src, s, '@', TOK_AT);
+    HANDLE_SINGLE(src, s, '#', TOK_HASHTAG);
+
+    HANDLE_SINGLE(src, s, '$', TOK_DOLLARSIGN);
+    HANDLE_SINGLE(src, s, '%', TOK_PERCENT);
+    HANDLE_SINGLE(src, s, '^', TOK_CARET);
+    HANDLE_SINGLE(src, s, '&', TOK_AMPERSAND);
+
+    HANDLE_SINGLE(src, s, '?', TOK_QUESTION_MARK);
+    HANDLE_SINGLE(src, s, '~', TOK_TILDA);
 
     // Handle character literals
 
@@ -258,7 +285,10 @@ token next_token(const char **src)
             s++;
         size_t len = s - start;
         if (len >= sizeof(tok.text))
+        {
+            fprintf(stderr, "Warning: token is too ling: %s\n", tok.text);
             len = sizeof(tok.text) - 1;
+        }
         strncpy(tok.text, start, len);
         tok.text[len] = '\0';
         s++;
