@@ -2,7 +2,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-block *grid_step_block(grid *g, u8 x, u8 y, u8 side)
+block *grid_step_block(const grid *g, const u8 x, const u8 y, const u8 side)
 {
     u8 offset_x = x;
     u8 offset_y = y;
@@ -18,7 +18,7 @@ block *grid_step_block(grid *g, u8 x, u8 y, u8 side)
     return &g->blocks[offset_y * g->width + offset_x];
 }
 
-io_slot *grid_step_edge(grid *g, u8 x, u8 y, u8 side)
+io_slot *grid_step_edge(const grid *g, const u8 x, const u8 y, const u8 side)
 {
     if ((side == up && y == 0) ||               //
         (side == down && y == g->height - 1) || //
@@ -51,12 +51,12 @@ void block_io_unlock_error(block *b)
     b->last_caused_overflow = true;
 }
 
-bool can_read(io_slot *slot)
+bool can_read(const io_slot *slot)
 {
     return slot->ptr && slot->read_only && slot->cur < slot->len;
 }
 
-bool can_write(io_slot *slot)
+bool can_write(const io_slot *slot)
 {
     return slot->ptr && !slot->read_only && slot->cur < slot->len;
 }
@@ -67,13 +67,13 @@ u8 read_byte(io_slot *slot)
     return slot->ptr[slot->cur++];
 }
 
-void write_byte(io_slot *slot, u8 val)
+void write_byte(io_slot *slot, const u8 val)
 {
     assert(slot->cur < slot->len);
     slot->ptr[slot->cur++] = val;
 }
 
-void block_iter_pre_move(grid *g, block *b, u8 x, u8 y)
+void block_iter_pre_move(grid *g, block *b, const u8 x, const u8 y)
 {
     if (!b->bytecode || b->state_halted || b->waiting_for_io)
         return;
@@ -83,7 +83,7 @@ void block_iter_pre_move(grid *g, block *b, u8 x, u8 y)
     if (b->waiting_ticks)
         return;
 
-    if (b->current_instruction >= b->length)
+    if (b->current_instruction >= b->length) // wrap around to not read garbage
         b->current_instruction = 0;
 
     const instruction i = b->bytecode[b->current_instruction];
@@ -150,7 +150,7 @@ void block_iter_pre_move(grid *g, block *b, u8 x, u8 y)
 }
 
 // write values to target
-void block_iter_write_to(grid *g, block *b, u8 x, u8 y)
+void block_iter_write_to(const grid *g, block *b, const u8 x, const u8 y)
 {
     if (!b->bytecode || b->state_halted)
         return;
@@ -186,8 +186,8 @@ void block_iter_write_to(grid *g, block *b, u8 x, u8 y)
 
     slot = grid_step_edge(g, x, y, side); // checks for attempts to push to the edge
 
+    // transfer is to another block, they will read the value later
     if (!slot)
-        // transfer is to another block, they will read the value later
         return;
 
     if (can_write(slot))
@@ -201,7 +201,7 @@ void block_iter_write_to(grid *g, block *b, u8 x, u8 y)
 }
 
 // read values from neighboink blocks
-void block_iter_read_from(grid *g, block *b, u8 x, u8 y)
+void block_iter_read_from(const grid *g, block *b, u8 x, u8 y)
 {
     if (!b->bytecode || b->state_halted)
         return;
@@ -212,65 +212,63 @@ void block_iter_read_from(grid *g, block *b, u8 x, u8 y)
     if (b->waiting_ticks)
         return;
 
-    side side = b->transfer_side;
+    side trans_side = b->transfer_side;
     io_slot *slot = NULL;
 
-    if (side == invalid)
+    if (trans_side == invalid)
         return;
 
-    u8 look_counter = 0;
-again:
-    if (side != 4) // for specific sides:
+    for (u8 look_counter = 0;;look_counter++)
     {
-        slot = grid_step_edge(g, x, y, side); // check for edge
-
-        if (!slot) // has to be a block
+        if (trans_side != 4) // for specific sides:
         {
-            block *src = grid_step_block(g, x, y, side);
-            assert(src != NULL);
+            slot = grid_step_edge(g, x, y, trans_side); // check for edge
 
-            if (src->state_halted) // if block cannot respond we go offline
+            if (!slot) // has to be a block
             {
-                block_io_unlock_error(b);
-                return;
+                block *src = grid_step_block(g, x, y, trans_side);
+                assert(src != NULL);
+
+                if (src->state_halted) // if block cannot respond we go offline
+                {
+                    block_io_unlock_error(b);
+                    return;
+                }
+
+                if (src->waiting_for_io && src->waiting_transfer) // block is waiting for io and waiting to push data
+                {
+                    b->transfer_value = src->transfer_value; // accept his value
+                    block_io_unlock(b);
+                    block_io_unlock(src);
+                    return;
+                }
+
+                return; // wait for more mayb he will send data soon
             }
 
-            if (src->waiting_for_io && src->waiting_transfer) // block is waiting for io and waiting to push data
+            if (can_read(slot))
             {
-                b->transfer_value = src->transfer_value; // accept his value
+                b->transfer_value = read_byte(slot);
                 block_io_unlock(b);
-                block_io_unlock(src);
                 return;
             }
 
-            return; // wait for more mayb he will send data soon
-        }
+            block_io_unlock_error(b); // cannot read - ran out of bytes it seems
+            return;
+        } // side is ANY
 
-        if (can_read(slot))
+        if (look_counter > 4) // didn find anything! must be a 1x1 world with no outputs
         {
-            b->transfer_value = read_byte(slot);
-            block_io_unlock(b);
+            assert(0 && "Grid 1x1 with no outputs");
             return;
         }
 
-        block_io_unlock_error(b); // cannot read - ran out of bytes it seems
-        return;
-    } // side is ANY
-
-    if (look_counter > 4) // didn find anything! must be a 1x1 world with no outputs
-    {
-        // block_io_unlock_error(b);
-        assert(0 && "Grid 1x1 with no outputs");
-        return;
+        // look for anything that can get us bytes, start with up and loop to left
+        trans_side = trans_side == 4 ? up : trans_side + 1;
     }
-
-    // look for anything that can get us bytes, start with up and loop to left
-    side = side == 4 ? up : side + 1;
-    look_counter++;
-    goto again;
 }
 
-void block_iter_exec_op(grid *g, block *b, u8 x, u8 y)
+void block_iter_exec_op(const grid *g, block *b, u8 x, u8 y)
 {
     if (!b->bytecode || b->state_halted)
         return;
@@ -289,7 +287,7 @@ void block_iter_exec_op(grid *g, block *b, u8 x, u8 y)
     if (b->transfered)
         operand_value = b->transfer_value;
 
-    instruction i = b->bytecode[b->current_instruction];
+    const instruction i = b->bytecode[b->current_instruction];
 
     // handle write to targets that doesn require inter-block transfers
     if (i.operation == PUT || i.operation == POP)

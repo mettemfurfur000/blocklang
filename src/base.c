@@ -37,7 +37,7 @@ void free_grid(grid *g)
     free(g);
 }
 
-u16 io_slot_offset(grid *g, u8 side, u8 slot)
+u16 io_slot_offset(const grid *g, const u8 side, const u8 slot)
 {
     assert(side < 4);
 
@@ -46,7 +46,7 @@ u16 io_slot_offset(grid *g, u8 side, u8 slot)
     else
         assert(slot < g->height);
 
-    slot = (side == up || side == down) ? slot % g->width : slot % g->height;
+    const u8 actual_slot = (side == up || side == down) ? slot % g->width : slot % g->height;
 
     u16 offset = 0;
 
@@ -57,7 +57,7 @@ u16 io_slot_offset(grid *g, u8 side, u8 slot)
     if (side == left)
         offset += g->width;
 
-    offset += slot;
+    offset += actual_slot;
 
     return offset;
 }

@@ -19,9 +19,14 @@ int main(int argc, char *argv[])
     int c;
     const char *input_file = NULL;
 
-    while ((c = getopt(argc, argv, ":f:")) != -1)
+    bool run_immediately = false;
+
+    while ((c = getopt(argc, argv, "rf:")) != -1)
         switch (c)
         {
+        case 'r':
+            run_immediately = true;
+            break;
         case 'f':
             input_file = optarg;
             break;
@@ -69,6 +74,9 @@ int main(int argc, char *argv[])
 
     load_program(g, 0, 0, bytecode, len);
 
+    if (run_immediately)
+        goto run;
+
     printf("/quit to exit\n");
     printf("/debug to toggle debug output\n");
 
@@ -84,7 +92,7 @@ int main(int argc, char *argv[])
             g->debug = !g->debug;
             continue;
         }
-
+    run:
         run_grid(g, TICK_LIMIT);
 
         if (g->ticks >= TICK_LIMIT)
@@ -98,7 +106,7 @@ int main(int argc, char *argv[])
 
         if (g->any_ticked == false)
         {
-            printf("Execution completed\n");
+            // printf("Execution completed\n");
             break;
         }
 

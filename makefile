@@ -1,5 +1,5 @@
-CFLAGS += -Os -Wall -Wpedantic -fanalyzer -g #-pg -no-pie
-LDFLAGS += -lm -g# -pg
+CFLAGS += -O3 -Wall -Wpedantic -fanalyzer -g -pg -no-pie
+LDFLAGS += -lm -g -pg
 
 LDFLAGS += -LC:/msys64/mingw64/lib -lmingw32 -lws2_32
 
@@ -12,6 +12,8 @@ objects_c := $(patsubst %.c,obj/%.o,$(sources_c))
 objects_cpp := $(patsubst %.cpp,obj/%.o,$(sources_cpp))
 objects := $(objects_c) $(objects_cpp)
 headers := $(shell cd include;echo *.h)
+
+all: test assembler singleblock
 
 obj/main_%.o : mains/%.c
 	gcc $(CFLAGS) -c $^ -o $@
@@ -31,8 +33,6 @@ assembler: $(objects) obj/main_assembler.o
 
 singleblock: $(objects) obj/main_singleblock.o
 	cc ${CFLAGS} -o build/block $^ $(LDFLAGS)
-
-all: test assembler singleblock
 
 clean:
 	rm build/*

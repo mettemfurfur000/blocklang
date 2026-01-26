@@ -19,7 +19,7 @@ typedef enum
 typedef struct
 {
     token_type type;
-    char text[32]; // copy of the lexeme
+    char text[256]; // copy of the lexeme
     int value;     // numeric value for numbers
 } token;
 

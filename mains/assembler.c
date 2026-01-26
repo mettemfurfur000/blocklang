@@ -44,17 +44,15 @@ int main(int argc, char *argv[])
                 fprintf(stderr, "Unknown option character `\\x%x'.\n", optopt);
             return 1;
         default:
+        usage:
             fprintf(stderr, "Usage: -f <filename> -o <output_file>");
             return 1;
         }
 
     char *source = NULL;
 
-    if (input_file == NULL || output_file == NULL)
-    {
-        fprintf(stderr, "Input and output files required\n");
-        return 1;
-    }
+    if (input_file == NULL || output_file == NULL)  
+        goto usage;
 
     if (input_file)
     {

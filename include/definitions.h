@@ -133,7 +133,7 @@ typedef struct
 
 grid *initialize_grid(u8 w, u8 h);
 
-u16 io_slot_offset(grid *g, u8 side, u8 slot);
+u16 io_slot_offset(const grid *g, const u8 side, const u8 slot);
 
 void attach_input(grid *g, u8 side, u8 slot, const u8 *src, u8 len);
 void attach_output(grid *g, u8 side, u8 slot, u8 *dst, u8 len);
