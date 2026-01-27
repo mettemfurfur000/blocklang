@@ -114,6 +114,9 @@ void block_iter_pre_move(grid *g, block *b, const u8 x, const u8 y)
 
     if (b->transfer_side != invalid)
     {
+        // seems like wer bouta interact with sum blocks,
+        // figure out if operation is reading first
+        // if its a reading operation we set waiting_transfer to false
         b->waiting_for_io = true;
 
         switch (i.operation)
@@ -218,7 +221,7 @@ void block_iter_read_from(const grid *g, block *b, u8 x, u8 y)
     if (trans_side == invalid)
         return;
 
-    for (u8 look_counter = 0;;look_counter++)
+    for (u8 look_counter = 0;; look_counter++)
     {
         if (trans_side != 4) // for specific sides:
         {
@@ -310,13 +313,22 @@ void block_iter_exec_op(const grid *g, block *b, u8 x, u8 y)
             b->registers[i.target - RG0] = operand_value;
             break;
         case ADJ:
-            // should be illegal
-            // ((u8 *)(b->bytecode))[b->current_instruction + 1] = operand_value;
-            // advance_to++;
+            // should be illegal but wat do i know
+            ((u8 *)(b->bytecode))[b->current_instruction + 1] = operand_value;
+            // when putting, operand value usualy comes from an accumulator
+            advance_to++;
             break;
-        // case REF:
-        //     // illegal to write to bytecode
-        //     break;
+        case REF:;
+            // when used with writing instructions PUT and POP, ACC value will be used as an address, and RG3 will be written to said address in bytecode
+            // should illegal to write to bytecode but u can use dat as memory mebe
+            const u8 addr = operand_value;
+
+            const bool toofar = addr > b->length;
+
+            b->last_caused_overflow = toofar ? true : false;
+            if (!toofar)
+                ((u8 *)(b->bytecode))[addr] = b->registers[3];
+            break;
         case NIL:
             // nothing
             break;
@@ -351,12 +363,12 @@ void block_iter_exec_op(const grid *g, block *b, u8 x, u8 y)
             advance_to++;
             break;
         case REF:;
-            u8 ptr = b->accumulator;
+            const u8 addr = b->accumulator;
 
-            const bool toofar = ptr > b->length;
+            const bool toofar = addr > b->length;
 
             b->last_caused_overflow = toofar ? true : false;
-            operand_value = toofar ? 0 : ((u8 *)(b->bytecode))[ptr];
+            operand_value = toofar ? 0 : ((u8 *)(b->bytecode))[addr];
             break;
         case NIL:
             operand_value = 0;

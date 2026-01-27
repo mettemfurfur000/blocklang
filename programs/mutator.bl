@@ -1,0 +1,51 @@
+    push array           ; arg 1
+    push '@'             ; arg 2
+    push CUR             ; arg 3
+    jmp array_add        ; array_add(array,'a')
+    push array           ; push message pointer
+    push CUR             ; push current address 
+    jmp print            ; `call` a print function
+    halt
+
+__f_ret_void:
+    pop ACC             ; pop return address to acc
+    add 3               ; jmp <label> takes 2 bytes
+    jmp ACC
+
+print:
+    pop RG3             ; return addr
+    pop ACC             ; message ptr
+    push RG3            ; put ret addr back
+__print_loop:
+    put RG0             ; save string pointer
+    get REF             ; get a byte from the message label, overrides our pointer
+    put DWN             ; put down what was here
+    jez __print_ret     ; if \0 we end
+    jof __print_ret     ; there might be an overflow issue with putting values to slots...
+    get RG0             ; restore the pointer
+    add 1               ; add 1
+    jmp __print_loop    ; back 
+__print_ret:
+    jmp __f_ret_void    ; no return values
+
+array_add:              ; array_add(*arr, u8 increment)
+    pop RG3             ; pop ret addr
+    pop RG2             ; pop increment value
+    pop ACC             ; pop arr addr
+    push RG3            ; stash ret addr
+__array_add_loop:
+    put RG0             ; clone arr addr to rg0
+    get REF             ; acc = arr[acc]
+    jez __array_add_ret ; ret on \0
+    add RG2             ; acc += increment
+    put RG3             ; put REF requires the value to be in RG3, ACC will be used as an address
+    get RG0             ; restore arr pointer from RG0 to ACC
+    put REF             ; arr[acc] = RG3
+    get RG0             ; advance pointer further
+    add 1
+    jmp __array_add_loop
+__array_add_ret:
+    jmp __f_ret_void    ; no return values
+
+array: 
+. [ 1 2 3 4 5 0 ]

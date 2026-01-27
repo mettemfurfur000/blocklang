@@ -142,7 +142,8 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
             {
                 if (next.type != TOK_LABEL && next.type != TOK_NUMBER && next.type != TOK_TARGET)
                 {
-                    fprintf(stderr, "Line %d: Expected a label, number or a target after jump opcode [%s], got [%s]\n",
+                    fprintf(stderr,
+                            "Line %d: Expected a label, number or a target after jump opcode \"%s\", got \"%s\"\n",
                             cur_line, tok.text, next.text);
                     return false;
                 }
@@ -163,7 +164,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
             }
             else if (next.type != TOK_TARGET)
             {
-                fprintf(stderr, "Line %d: Expected a target or a number after opcode [%s], got [%s]\n", cur_line,
+                fprintf(stderr, "Line %d: Expected a target or a number after opcode \"%s\", got \"%s\"\n", cur_line,
                         tok.text, next.text);
                 return false;
             }
@@ -174,16 +175,33 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
         }
         else if (tok.type == TOK_DOT)
         {
-            // Dots followed by a string will be copied to bytecode as-is (including \0)
+            // Dots followed by a string will be copied to bytecode as-is (\0 appended automatically)
             token next = next_token(&s, &cur_line);
 
-            if (next.type != TOK_STRING)
+            if (next.type == TOK_STRING)
             {
-                fprintf(stderr, "Line %d: Expected a string after a dot, got [%s]\n", cur_line, next.text);
+                program_length += strlen(next.text) + 1;
+            }
+            else if (next.type == TOK_SQUARE_BRACKET_LEFT)
+            {
+                while (next.type != TOK_SQUARE_BRACKET_RIGHT)
+                {
+                    next = next_token(&s, &cur_line);
+                    if (next.type != TOK_NUMBER && next.type != TOK_SQUARE_BRACKET_RIGHT)
+                    {
+                        fprintf(stderr, "Line %d: Expected a number or a ] to close an array of numbers, got: %s\n",
+                                cur_line, next.text);
+                        return false;
+                    }
+                    program_length++;
+                }
+            }
+            else
+            {
+                fprintf(stderr, "Line %d: Expected a string or an array of numbers after a dot, got \"%s\"\n", cur_line,
+                        next.text);
                 return false;
             }
-
-            program_length += strlen(next.text) + 1;
         }
         else
         {
@@ -222,7 +240,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
         }
         else if (tok.type == TOK_DOT)
         {
-            // Dots followed by a string will be copied to bytecode as-is (including \0)
+            // Dots followed by a string will be copied to bytecode as-is (\0 injected automatically)
             token next = next_token(&s, &cur_line);
 
             if (next.type == TOK_STRING)
@@ -234,9 +252,26 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
                     *bc_ptr++ = next.text[i];
                 }
             }
+            else if (next.type == TOK_SQUARE_BRACKET_LEFT)
+            {
+                while (next.type != TOK_SQUARE_BRACKET_RIGHT)
+                {
+                    next = next_token(&s, &cur_line);
+                    if (next.type != TOK_NUMBER && next.type != TOK_SQUARE_BRACKET_RIGHT)
+                    {
+                        fprintf(stderr, "Line %d: Expected a number or a ] to close an array of numbers, got: %s\n",
+                                cur_line, next.text);
+                        return false;
+                    }
+                    // program_length++;
+                    if (next.value > 0xff)
+                        fprintf(stderr, "Line %d: Warning - number will not fit in a byte: %d\n", cur_line, next.value);
+                    *bc_ptr++ = next.value & 0xff;
+                }
+            }
             else
             {
-                fprintf(stderr, "Line %d: Expected a string after a dot, got [%s]\n", cur_line, next.text);
+                fprintf(stderr, "Line %d: Expected a string after a dot, got \"%s\"]\n", cur_line, next.text);
                 return false;
             }
         }
@@ -264,8 +299,8 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
 
                     if (label_address == -1)
                     {
-                        fprintf(stderr, "Line %d: Undefined label [%s] after jump opcode [%s]\n", cur_line, next.text,
-                                tok.text);
+                        fprintf(stderr, "Line %d: Undefined label \"%s\" after jump opcode \"%s\"\n", cur_line,
+                                next.text, tok.text);
                         return false;
                     }
 
@@ -315,7 +350,8 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
 
                 if (label_address == -1)
                 {
-                    fprintf(stderr, "Line %d: Undefined label [%s] for opcode [%s]\n", cur_line, next.text, tok.text);
+                    fprintf(stderr, "Line %d: Undefined label \"%s\" for opcode \"%s\"\n", cur_line, next.text,
+                            tok.text);
                     return false;
                 }
 
@@ -342,7 +378,8 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
             }
             else
             {
-                fprintf(stderr, "Line %d: Expected a target, number, label, or a literal after opcode [%s], got [%s]\n",
+                fprintf(stderr,
+                        "Line %d: Expected a target, number, label, or a literal after opcode \"%s\", got \"%s\"\n",
                         cur_line, tok.text, next.text);
                 free(bytecode);
                 return false;
@@ -350,7 +387,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
         }
         else
         {
-            fprintf(stderr, "Line %d: Unexpected token id %d, text:[%s]\n", cur_line, tok.type, tok.text);
+            fprintf(stderr, "Line %d: Unexpected token id %d, text:\"%s\"\n", cur_line, tok.type, tok.text);
             exit(-1);
             // assert(false && "Unreachable - invalid token");
         }
@@ -382,6 +419,6 @@ void debug_tokenize(const char *src)
         if (tok.type == TOK_EOF)
             break;
 
-        printf("%lld:\t[%s]:\t%s\n", s - src, tok_to_str(tok.type), tok.text);
+        printf("%lld:\t\"%s\":\t%s\n", s - src, tok_to_str(tok.type), tok.text);
     }
 }

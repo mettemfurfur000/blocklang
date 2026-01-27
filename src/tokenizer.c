@@ -115,7 +115,7 @@ token next_token(const char **src, int *lines_ret)
         size_t len = s - start;
         if (len >= sizeof(tok.text))
         {
-            fprintf(stderr, "Warning: token is too ling: %s\n", tok.text);
+            fprintf(stderr, "Warning: token is too long: %s\n", tok.text);
             len = sizeof(tok.text) - 1;
         }
         strncpy(tok.text, start, len);
@@ -170,6 +170,9 @@ token next_token(const char **src, int *lines_ret)
                 s++;
             tok.value = (int)strtol(start, NULL, 10);
         }
+        size_t len = s - start;
+        strncpy(tok.text, start, len);
+        tok.text[len] = '\0';
         tok.type = TOK_NUMBER;
         *src = s;
         return tok;
@@ -249,7 +252,7 @@ token next_token(const char **src, int *lines_ret)
             case '\"':
                 tok.text[0] = '\"';
                 break;
-            case '?':
+            case '\?':
                 tok.text[0] = '\?';
                 break;
             default:

@@ -49,6 +49,7 @@ typedef enum
     SLN, // represents the number of elements on the stack
     CUR, // represents current address of an instruction
     REF, // represents a byte that is located in bytecode dictated at ACC offset
+    // when used with writing instructions PUT and POP, ACC value will be used as an address, and RG3 will be written to said address in bytecode
     TARGET_GUARD_LAST
 } targets;
 
