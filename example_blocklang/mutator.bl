@@ -1,0 +1,26 @@
+array = [ 1, 2, 3, 4, 5, 0 ];
+
+void print(addr)
+{
+    while(character = *addr)
+    {
+        push(DOWN, character);
+        addr += 1;
+    }
+}
+
+void array_add(addr, increment)
+{
+    while(val = *addr)
+    {
+        val += increment;
+        addr = val;
+        addr += 1;
+    }
+}
+
+main
+{
+    array_add(array, '@');
+    print(array);
+}

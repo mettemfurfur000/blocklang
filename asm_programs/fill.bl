@@ -1,0 +1,9 @@
+    add 7       ; add 7s to acc
+    push ACC    ; push from acc onto stack
+    jof next    ; if full, go next
+    jmp NIL     ; loop until full
+next:
+    pop DWN     ; pop one value down
+    get SLN     ; check stack length
+    jnz next    ; repeat popping
+    halt

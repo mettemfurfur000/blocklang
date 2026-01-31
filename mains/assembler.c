@@ -84,7 +84,6 @@ int main(int argc, char *argv[])
 
     fwrite(bytecode, 1, bytecode_len, f);
     fclose(f);
-    fprintf(stdout, "Successfull assembly\n");
 
     return 0;
 }

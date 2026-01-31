@@ -1,0 +1,7 @@
+    get UP      ; get from up top to acc
+    jof end     ; if an error we end it
+    add 44      ; add 44 to acc
+    put ANY     ; put result somewhere - locks here
+    jmp NIL     ; jump to instruction 0
+end:
+    halt

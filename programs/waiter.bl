@@ -1,4 +1,0 @@
-    add 44      ; add 44
-    wait 2
-    put DWN     ; put down
-    halt        ; bye bye

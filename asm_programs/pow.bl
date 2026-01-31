@@ -1,0 +1,30 @@
+    halt
+math_pow:
+    get 1               ; current result
+    put RG0             
+    ; process args - 2 values + 1 return addres
+    pop RG3             ; ret addr to rg3       - 2 left
+    pop ACC             ; exponent              - 1 left
+    pop RG2             ; base                  - 0
+    push RG3            ; save ret addres       - 1 again
+    jez __math_pow_ret  ; if exp is 0 result is 1..
+
+__math_pow_loop:
+    sub 1               ; decrement counter
+    put RG1             ; save it
+
+    get RG0             ; mult result with base
+    mlt RG2
+    put RG0
+
+    get RG1             ; check counter
+    jnz __math_pow_loop
+
+__math_pow_ret:
+    pop RG3             ; pop ret addr back to reg3 - 0 left
+    get RG0             ; get result
+    push ACC            ; push result to de stack   - 1 return value
+    get RG3             ; put addr to acc
+    add 3               ; skip func call
+    jmp ACC             ; ret
+

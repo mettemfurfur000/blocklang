@@ -15,45 +15,6 @@ typedef struct
     bool was_used;
 } label_entry;
 
-const char *tok_to_str(token_type t)
-{
-    switch (t)
-    {
-        CASE(TOK_EOF)
-        CASE(TOK_LABEL)
-        CASE(TOK_OPCODE)
-        CASE(TOK_TARGET)
-        CASE(TOK_NUMBER)
-        CASE(TOK_COMMA)
-        CASE(TOK_DOT)
-        CASE(TOK_COLON)
-        CASE(TOK_CHAR_LITERAL)
-        CASE(TOK_STRING)
-        CASE(TOK_BRACKET_LEFT)
-        CASE(TOK_BRACKET_RIGHT)
-        CASE(TOK_SQUARE_BRACKET_LEFT)
-        CASE(TOK_SQUARE_BRACKET_RIGHT)
-        CASE(TOK_CURLY_BRACKET_LEFT)
-        CASE(TOK_CURLY_BRACKET_RIGHT)
-        CASE(TOK_PLUS)
-        CASE(TOK_MINUS)
-        CASE(TOK_ASTERISK)
-        CASE(TOK_FORWARDSLASH)
-        CASE(TOK_EXCLAMATION_MARK)
-        CASE(TOK_AT)
-        CASE(TOK_HASHTAG)
-        CASE(TOK_DOLLARSIGN)
-        CASE(TOK_PERCENT)
-        CASE(TOK_CARET)
-        CASE(TOK_AMPERSAND)
-        CASE(TOK_QUESTION_MARK)
-        CASE(TOK_TILDA)
-        CASE(TOK_COMMENT)
-    default:
-        return "Unknown token";
-    }
-}
-
 int get_label_address(label_entry labels[], int total_labels, const char *label)
 {
     for (int i = 0; i < total_labels; i++)
@@ -74,6 +35,26 @@ void look_for_unused_labels(label_entry labels[], int total_labels)
             fprintf(stderr, "Line %d: Warning - unused label %s\n", labels[i].line, labels[i].name);
 }
 
+void fix_opcode(token *t)
+{
+    if (is_valid_opcode(t->text))
+        t->type = TOK_OPCODE;
+}
+
+void fix_target(token *t)
+{
+    if (is_valid_target(t->text))
+        t->type = TOK_TARGET;
+}
+
+token low_level_new_token(const char **src, int *lines_ret)
+{
+    token t = next_token(src, lines_ret);
+    fix_opcode(&t);
+    fix_target(&t);
+    return t;
+}
+
 bool assemble_program(const char *source, void **dest, u8 *out_len)
 {
     // if (!source || !dest || !out_len)
@@ -90,7 +71,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
 
     while (true)
     {
-        token tok = next_token(&s, &cur_line);
+        token tok = low_level_new_token(&s, &cur_line);
         if (tok.type == TOK_EOF)
             break;
 
@@ -133,7 +114,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
                 continue;
             }
 
-            token next = next_token(&s, &cur_line);
+            token next = low_level_new_token(&s, &cur_line);
 
             // opcodes take (target | label | number | char literal | none ), depending on opcodes
 
@@ -176,7 +157,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
         else if (tok.type == TOK_DOT)
         {
             // Dots followed by a string will be copied to bytecode as-is (\0 appended automatically)
-            token next = next_token(&s, &cur_line);
+            token next = low_level_new_token(&s, &cur_line);
 
             if (next.type == TOK_STRING)
             {
@@ -186,7 +167,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
             {
                 while (next.type != TOK_SQUARE_BRACKET_RIGHT)
                 {
-                    next = next_token(&s, &cur_line);
+                    next = low_level_new_token(&s, &cur_line);
                     if (next.type != TOK_NUMBER && next.type != TOK_SQUARE_BRACKET_RIGHT)
                     {
                         fprintf(stderr, "Line %d: Expected a number or a ] to close an array of numbers, got: %s\n",
@@ -205,7 +186,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
         }
         else
         {
-            fprintf(stderr, "Line %d: Unexpected token type %d\n", cur_line, tok.type);
+            fprintf(stderr, "Line %d: Unexpected token type %s\n", cur_line, tok_to_str(tok.type));
             return false;
         }
     }
@@ -231,7 +212,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
 
     while (true)
     {
-        token tok = next_token(&s, &cur_line);
+        token tok = low_level_new_token(&s, &cur_line);
         if (tok.type == TOK_EOF)
             break;
         else if (tok.type == TOK_LABEL || tok.type == TOK_COMMENT)
@@ -241,7 +222,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
         else if (tok.type == TOK_DOT)
         {
             // Dots followed by a string will be copied to bytecode as-is (\0 injected automatically)
-            token next = next_token(&s, &cur_line);
+            token next = low_level_new_token(&s, &cur_line);
 
             if (next.type == TOK_STRING)
             {
@@ -256,7 +237,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
             {
                 while (next.type != TOK_SQUARE_BRACKET_RIGHT)
                 {
-                    next = next_token(&s, &cur_line);
+                    next = low_level_new_token(&s, &cur_line);
                     if (next.type != TOK_NUMBER && next.type != TOK_SQUARE_BRACKET_RIGHT)
                     {
                         fprintf(stderr, "Line %d: Expected a number or a ] to close an array of numbers, got: %s\n",
@@ -287,7 +268,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
                 continue;
             }
 
-            token next = next_token(&s, &cur_line); // Get the next token
+            token next = low_level_new_token(&s, &cur_line); // Get the next token
 
             if (opcode == JMP || opcode == JEZ || opcode == JNZ ||
                 opcode == JOF) // jumps can accept labels, numbers, targets
@@ -413,12 +394,14 @@ void debug_tokenize(const char *src)
 {
     const char *s = src;
 
+    i32 line = 1;
+
     while (true)
     {
-        token tok = next_token(&s, NULL);
+        token tok = low_level_new_token(&s, &line);
         if (tok.type == TOK_EOF)
             break;
 
-        printf("%lld:\t\"%s\":\t%s\n", s - src, tok_to_str(tok.type), tok.text);
+        printf("Line\t%d: \"%s\" \t \"%s\"\n", line, tok_to_str(tok.type), tok.text);
     }
 }

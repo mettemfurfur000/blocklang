@@ -1,4 +1,4 @@
-CFLAGS += -O3 -Wall -Wpedantic -fanalyzer -g -pg -no-pie
+CFLAGS += -O0 -Wall -Wpedantic -fanalyzer -g -pg -no-pie
 LDFLAGS += -lm -g -pg
 
 LDFLAGS += -LC:/msys64/mingw64/lib -lmingw32 -lws2_32
@@ -13,7 +13,7 @@ objects_cpp := $(patsubst %.cpp,obj/%.o,$(sources_cpp))
 objects := $(objects_c) $(objects_cpp)
 headers := $(shell cd include;echo *.h)
 
-all: test assembler singleblock
+all: assembler singleblock blocklang
 
 obj/main_%.o : mains/%.c
 	gcc $(CFLAGS) -c $^ -o $@
@@ -26,13 +26,17 @@ obj/%.o : src/%.cpp
 
 test: $(objects) obj/main_test.o
 	gcc ${CFLAGS} -o build/test_app $^ $(LDFLAGS)
-	cp -r programs/* build/
 
 assembler: $(objects) obj/main_assembler.o
 	gcc ${CFLAGS} -o build/basm $^ $(LDFLAGS)
+	cp -r example_blocklang/* build/
+	cp -r asm_programs/* build/
 
 singleblock: $(objects) obj/main_singleblock.o
 	cc ${CFLAGS} -o build/block $^ $(LDFLAGS)
+
+blocklang: $(objects) obj/main_blocklang.o
+	gcc ${CFLAGS} -o build/blocklang $^ $(LDFLAGS)
 
 clean:
 	rm build/*

@@ -1,0 +1,14 @@
+    get message      ; get a message address
+read_loop:
+    put RG0          ; save the pointer for later
+    get REF          ; get a byte from the message label, overrides our pointer
+    put DWN          ; put down what was here
+    jez end          ; if \0 we end
+    jof end          ; there might be an overflow issue with putting values to slots...
+    get RG0          ; restore the pointer
+    add 1            ; add 1
+    jmp read_loop    ; back 
+end:
+    halt
+message: 
+."Hello world"

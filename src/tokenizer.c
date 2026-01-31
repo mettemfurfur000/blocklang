@@ -53,12 +53,76 @@ bool is_valid_target(const char *str)
     return false;
 }
 
+const char *tok_to_str(token_type t)
+{
+    switch (t)
+    {
+        CASE(TOK_EOF)
+        CASE(TOK_LABEL)
+        CASE(TOK_OPCODE)
+        CASE(TOK_TARGET)
+        CASE(TOK_NUMBER)
+        CASE(TOK_COMMA)
+        CASE(TOK_DOT)
+        CASE(TOK_COLON)
+        CASE(TOK_SEMICOLON)
+        CASE(TOK_CHAR_LITERAL)
+        CASE(TOK_STRING)
+        CASE(TOK_BRACKET_LEFT)
+        CASE(TOK_BRACKET_RIGHT)
+        CASE(TOK_SQUARE_BRACKET_LEFT)
+        CASE(TOK_SQUARE_BRACKET_RIGHT)
+        CASE(TOK_CURLY_BRACKET_LEFT)
+        CASE(TOK_CURLY_BRACKET_RIGHT)
+        CASE(TOK_PLUS)
+        CASE(TOK_MINUS)
+        CASE(TOK_ASTERISK)
+        CASE(TOK_FORWARDSLASH)
+        CASE(TOK_EXCLAMATION_MARK)
+        CASE(TOK_AT)
+        CASE(TOK_HASHTAG)
+        CASE(TOK_DOLLARSIGN)
+        CASE(TOK_PERCENT)
+        CASE(TOK_CARET)
+        CASE(TOK_AMPERSAND)
+        CASE(TOK_QUESTION_MARK)
+        CASE(TOK_TILDA)
+        CASE(TOK_LESSER)
+        CASE(TOK_GREATER)
+        CASE(TOK_LESSER_OR_EQUAL)
+        CASE(TOK_GREATER_OR_EQUAL)
+        CASE(TOK_EQUAL)
+        CASE(TOK_NOT_EQUAL)
+        CASE(TOK_PLUS_EQUAL)
+        CASE(TOK_MINUS_EQUAL)
+        CASE(TOK_ASTERISK_EQUAL)
+        CASE(TOK_FORWARDSLASH_EQUAL)
+        CASE(TOK_COMMENT)
+    default:
+        return "Unknown token";
+    }
+}
+
 #define HANDLE_SINGLE(src, s, symbol, tok_type)                                                                        \
     if (*(s) == symbol)                                                                                                \
     {                                                                                                                  \
         tok.type = tok_type;                                                                                           \
         s++;                                                                                                           \
         *src = s;                                                                                                      \
+        tok.text[0] = symbol;                                                                                          \
+        tok.text[1] = '\0';                                                                                            \
+        return tok;                                                                                                    \
+    }
+
+#define HANDLE_DOUBLE(src, s, symbol1, symbol2, tok_type)                                                              \
+    if (*(s) == symbol1 && *(s + 1) == symbol2)                                                                        \
+    {                                                                                                                  \
+        tok.type = tok_type;                                                                                           \
+        s += 2;                                                                                                        \
+        *src = s;                                                                                                      \
+        tok.text[0] = symbol1;                                                                                          \
+        tok.text[1] = symbol2;                                                                                          \
+        tok.text[2] = '\0';                                                                                            \
         return tok;                                                                                                    \
     }
 
@@ -87,7 +151,7 @@ token next_token(const char **src, int *lines_ret)
         return tok;
     }
 
-    // Handle comments
+    // Handle comments - semicolon starts a line comment
     if (*s == ';')
     {
         tok.type = TOK_COMMENT;
@@ -97,7 +161,7 @@ token next_token(const char **src, int *lines_ret)
         size_t len = s - start;
         if (len >= sizeof(tok.text))
         {
-            fprintf(stderr, "Warning: token is too ling: %s\n", tok.text);
+            fprintf(stderr, "Warning: token is too long: %s\n", tok.text);
             len = sizeof(tok.text) - 1;
         }
         strncpy(tok.text, start, len);
@@ -129,23 +193,9 @@ token next_token(const char **src, int *lines_ret)
         }
         else
         {
-            // Check if it's an opcode or target
-            if (is_valid_opcode(tok.text))
-            {
-                tok.type = TOK_OPCODE;
-                *src = s;
-                return tok;
-            }
-
-            if (is_valid_target(tok.text))
-            {
-                tok.type = TOK_TARGET;
-                *src = s;
-                return tok;
-            }
-
-            // Unknown identifier
-            tok.type = TOK_LABEL; // treat as a label for now
+            // For .hb high-level language files, treat everything as identifiers/labels
+            // Don't check for opcodes or targets - those are only in .bl block language
+            tok.type = TOK_LABEL; // all identifiers are labels in high-level language
         }
 
         *src = s;
@@ -191,9 +241,13 @@ token next_token(const char **src, int *lines_ret)
     HANDLE_SINGLE(src, s, '{', TOK_CURLY_BRACKET_LEFT);
     HANDLE_SINGLE(src, s, '}', TOK_CURLY_BRACKET_RIGHT);
 
+    HANDLE_DOUBLE(src, s, '+', '=', TOK_PLUS_EQUAL);
     HANDLE_SINGLE(src, s, '+', TOK_PLUS);
+    HANDLE_DOUBLE(src, s, '-', '=', TOK_MINUS_EQUAL);
     HANDLE_SINGLE(src, s, '-', TOK_MINUS);
+    HANDLE_DOUBLE(src, s, '*', '=', TOK_ASTERISK_EQUAL);
     HANDLE_SINGLE(src, s, '*', TOK_ASTERISK);
+    HANDLE_DOUBLE(src, s, '/', '=', TOK_FORWARDSLASH_EQUAL);
     HANDLE_SINGLE(src, s, '/', TOK_FORWARDSLASH);
 
     HANDLE_SINGLE(src, s, '!', TOK_EXCLAMATION_MARK);
@@ -207,6 +261,14 @@ token next_token(const char **src, int *lines_ret)
 
     HANDLE_SINGLE(src, s, '?', TOK_QUESTION_MARK);
     HANDLE_SINGLE(src, s, '~', TOK_TILDA);
+
+    HANDLE_SINGLE(src, s, '<', TOK_LESSER);
+    HANDLE_SINGLE(src, s, '>', TOK_GREATER);
+    HANDLE_DOUBLE(src, s, '<', '=', TOK_LESSER_OR_EQUAL);
+    HANDLE_DOUBLE(src, s, '>', '=', TOK_GREATER_OR_EQUAL);
+
+    HANDLE_SINGLE(src, s, '=', TOK_EQUAL);
+    HANDLE_DOUBLE(src, s, '!', '=', TOK_NOT_EQUAL);
 
     // Handle character literals
 

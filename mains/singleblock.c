@@ -102,7 +102,8 @@ int main(int argc, char *argv[])
             abort();
         }
 
-        printf("%.255s\n(took %d ticks)\n", out_buffer, g->ticks);
+        // printf("%.255s\n(took %d ticks)\n", out_buffer, g->ticks);
+        printf("%.255s\n", out_buffer);
 
         if (g->any_ticked == false)
         {
