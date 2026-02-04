@@ -293,6 +293,7 @@ int main(int argc, char *argv[])
             case 'H':
             case '?':
             {
+                display_debug_ui(g, &obj, out_buffer);
                 printf("\nCommands:\n");
                 printf("  i - change the input buffer\n");
                 printf("  s - step one instruction\n");
