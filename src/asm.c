@@ -47,7 +47,7 @@ void fix_target(token *t)
         t->type = TOK_TARGET;
 }
 
-token low_level_new_token(const char **src, int *lines_ret)
+token new_token_asm(const char **src, int *lines_ret)
 {
     token t = next_token(src, lines_ret);
     fix_opcode(&t);
@@ -55,11 +55,17 @@ token low_level_new_token(const char **src, int *lines_ret)
     return t;
 }
 
-bool assemble_program(const char *source, void **dest, u8 *out_len)
+void bytecode_write(u8 *bytecode, u8 value, u16 *line_table, u8 *instruction_index, u16 cur_line)
 {
-    // if (!source || !dest || !out_len)
-    //     return false;
+    bytecode[*instruction_index] = value;
+    line_table[*instruction_index] = cur_line;
 
+    (*instruction_index)++;
+    printf("Line %d [%d] = %02x / %c\n", cur_line, *instruction_index - 1, value, value >= 32 && value <= 126 ? value : '.');
+}
+
+bool assemble_program(const char *source, void **dest, u8 *out_len, u16 *line_table)
+{
     // First pass: determine length and collect labels
     const char *s = source;
 
@@ -71,7 +77,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
 
     while (true)
     {
-        token tok = low_level_new_token(&s, &cur_line);
+        token tok = new_token_asm(&s, &cur_line);
         if (tok.type == TOK_EOF)
             break;
 
@@ -114,7 +120,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
                 continue;
             }
 
-            token next = low_level_new_token(&s, &cur_line);
+            token next = new_token_asm(&s, &cur_line);
 
             // opcodes take (target | label | number | char literal | none ), depending on opcodes
 
@@ -157,7 +163,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
         else if (tok.type == TOK_DOT)
         {
             // Dots followed by a string will be copied to bytecode as-is (\0 appended automatically)
-            token next = low_level_new_token(&s, &cur_line);
+            token next = new_token_asm(&s, &cur_line);
 
             if (next.type == TOK_STRING)
             {
@@ -167,7 +173,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
             {
                 while (next.type != TOK_SQUARE_BRACKET_RIGHT)
                 {
-                    next = low_level_new_token(&s, &cur_line);
+                    next = new_token_asm(&s, &cur_line);
                     if (next.type != TOK_NUMBER && next.type != TOK_SQUARE_BRACKET_RIGHT)
                     {
                         fprintf(stderr, "Line %d: Expected a number or a ] to close an array of numbers, got: %s\n",
@@ -197,22 +203,17 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
         return false;
     }
 
-    // Allocate bytecode
-    u8 *bytecode = (u8 *)malloc(program_length);
-
-    if (!bytecode)
-        return false;
+    u8 bytecode[256] = {}; // static allocation to avoid dynamic memory issues
 
     // Second pass: generate bytecode
     s = source;
 
-    u8 *bc_ptr = bytecode;
-
+    u8 bc_index = 0; // Track current instruction index
     cur_line = 1;
 
     while (true)
     {
-        token tok = low_level_new_token(&s, &cur_line);
+        token tok = new_token_asm(&s, &cur_line);
         if (tok.type == TOK_EOF)
             break;
         else if (tok.type == TOK_LABEL || tok.type == TOK_COMMENT)
@@ -222,32 +223,29 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
         else if (tok.type == TOK_DOT)
         {
             // Dots followed by a string will be copied to bytecode as-is (\0 injected automatically)
-            token next = low_level_new_token(&s, &cur_line);
+            token next = new_token_asm(&s, &cur_line);
 
             if (next.type == TOK_STRING)
             {
                 const u32 len = strlen(next.text) + 1;
 
                 for (u32 i = 0; i < len; i++)
-                {
-                    *bc_ptr++ = next.text[i];
-                }
+                    bytecode_write(bytecode, next.text[i], line_table, &bc_index, cur_line);
             }
             else if (next.type == TOK_SQUARE_BRACKET_LEFT)
             {
                 while (next.type != TOK_SQUARE_BRACKET_RIGHT)
                 {
-                    next = low_level_new_token(&s, &cur_line);
+                    next = new_token_asm(&s, &cur_line);
                     if (next.type != TOK_NUMBER && next.type != TOK_SQUARE_BRACKET_RIGHT)
                     {
                         fprintf(stderr, "Line %d: Expected a number or a ] to close an array of numbers, got: %s\n",
                                 cur_line, next.text);
                         return false;
                     }
-                    // program_length++;
                     if (next.value > 0xff)
                         fprintf(stderr, "Line %d: Warning - number will not fit in a byte: %d\n", cur_line, next.value);
-                    *bc_ptr++ = next.value & 0xff;
+                    bytecode_write(bytecode, next.value & 0xff, line_table, &bc_index, cur_line);
                 }
             }
             else
@@ -263,12 +261,11 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
 
             if (opcode == HALT || opcode == NOP)
             {
-                // No operand here
-                *bc_ptr++ = encode_instruction(opcode, NIL);
+                bytecode_write(bytecode, INSTRUCTION(opcode, NIL), line_table, &bc_index, cur_line);
                 continue;
             }
 
-            token next = low_level_new_token(&s, &cur_line); // Get the next token
+            token next = new_token_asm(&s, &cur_line); // Get the next token
 
             if (opcode == JMP || opcode == JEZ || opcode == JNZ ||
                 opcode == JOF) // jumps can accept labels, numbers, targets
@@ -285,15 +282,15 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
                         return false;
                     }
 
-                    *bc_ptr++ = encode_instruction(opcode, ADJ); // use ADJ as a special target for labels
-                    *bc_ptr++ = (u8)label_address;               // write label address
+                    bytecode_write(bytecode, INSTRUCTION(opcode, ADJ), line_table, &bc_index, cur_line);
+                    bytecode_write(bytecode, (u8)label_address, line_table, &bc_index, cur_line);
                 }
                 else if (next.type == TOK_NUMBER)
                 {
-                    *bc_ptr++ = encode_instruction(opcode, ADJ);
+                    bytecode_write(bytecode, INSTRUCTION(opcode, ADJ), line_table, &bc_index, cur_line);
                     if (next.value > 0xff)
                         fprintf(stderr, "Line %d: Warning - number will not fit in a byte: %d\n", cur_line, next.value);
-                    *bc_ptr++ = next.value & 0xff;
+                    bytecode_write(bytecode, next.value & 0xff, line_table, &bc_index, cur_line);
                 }
                 else if (next.type == TOK_TARGET)
                 {
@@ -305,7 +302,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
                         exit(-1);
                     }
 
-                    *bc_ptr++ = encode_instruction(opcode, target);
+                    bytecode_write(bytecode, INSTRUCTION(opcode, target), line_table, &bc_index, cur_line);
                 }
                 else
                 {
@@ -319,12 +316,12 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
 
             if (next.type == TOK_CHAR_LITERAL)
             {
-                *bc_ptr++ = encode_instruction(opcode, ADJ);
-                *bc_ptr++ = next.text[0];
+                bytecode_write(bytecode, INSTRUCTION(opcode, ADJ), line_table, &bc_index, cur_line);
+                bytecode_write(bytecode, next.text[0], line_table, &bc_index, cur_line);
             }
             else if (next.type == TOK_LABEL)
             {
-                *bc_ptr++ = encode_instruction(opcode, ADJ);
+                bytecode_write(bytecode, INSTRUCTION(opcode, ADJ), line_table, &bc_index, cur_line);
 
                 // Lookup label address
                 int label_address = get_label_address(labels, total_labels, next.text);
@@ -336,15 +333,16 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
                     return false;
                 }
 
-                *bc_ptr++ = (u8)label_address;
+                bytecode_write(bytecode, (u8)label_address, line_table, &bc_index, cur_line);
             }
             else if (next.type == TOK_NUMBER)
             {
-                *bc_ptr++ = encode_instruction(opcode, ADJ); // encode vale as adjacent byte
+                bytecode_write(bytecode, INSTRUCTION(opcode, ADJ), line_table, &bc_index,
+                               cur_line); // encode value as adjacent byte
                 if (next.value > 0xff)
                     fprintf(stderr, "Line %d: Warning - number will not fit in a byte in front of an ADJ: %d\n",
                             cur_line, next.value);
-                *bc_ptr++ = next.value & 0xff;
+                bytecode_write(bytecode, next.value & 0xff, line_table, &bc_index, cur_line);
             }
             else if (next.type == TOK_TARGET)
             {
@@ -355,14 +353,13 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
                     assert(false && "Unreachable - target validity already checked");
                 }
 
-                *bc_ptr++ = encode_instruction(opcode, target);
+                bytecode_write(bytecode, INSTRUCTION(opcode, target), line_table, &bc_index, cur_line);
             }
             else
             {
                 fprintf(stderr,
                         "Line %d: Expected a target, number, label, or a literal after opcode \"%s\", got \"%s\"\n",
                         cur_line, tok.text, next.text);
-                free(bytecode);
                 return false;
             }
         }
@@ -378,10 +375,15 @@ bool assemble_program(const char *source, void **dest, u8 *out_len)
 
     // Output results
 
+    printf("Assembled program length: %d bytes\n", program_length);
+
     if (dest)
-        *dest = bytecode;
-    else
-        free(bytecode);
+    {
+        *dest = calloc(1, program_length);
+        if (!*dest)
+            return false;
+        memcpy(*dest, bytecode, program_length);
+    }
 
     if (out_len)
         *out_len = (u8)program_length;
@@ -398,7 +400,7 @@ void debug_tokenize(const char *src)
 
     while (true)
     {
-        token tok = low_level_new_token(&s, &line);
+        token tok = new_token_asm(&s, &line);
         if (tok.type == TOK_EOF)
             break;
 

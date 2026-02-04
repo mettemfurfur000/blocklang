@@ -6,7 +6,9 @@
 #include <unistd.h>
 
 #include "../include/definitions.h"
+#include "../include/objfile.h"
 #include "../include/utils.h"
+
 
 /*
     A minimal assembler program that accepts block assembly and spits out bytecode \
@@ -51,7 +53,7 @@ int main(int argc, char *argv[])
 
     char *source = NULL;
 
-    if (input_file == NULL || output_file == NULL)  
+    if (input_file == NULL || output_file == NULL)
         goto usage;
 
     if (input_file)
@@ -64,10 +66,11 @@ int main(int argc, char *argv[])
         }
     }
 
-    void *bytecode = NULL;
+    u8 *bytecode = NULL;
     u8 bytecode_len = 0;
+    u16 line_table[MAX_BYTECODE_SIZE] = {};
 
-    if (!assemble_program(source, &bytecode, &bytecode_len))
+    if (!assemble_program(source, (void **)&bytecode, &bytecode_len, line_table))
     {
         fprintf(stderr, "Assembly failed, all recognized tokens:\n");
         debug_tokenize(source);
@@ -79,11 +82,24 @@ int main(int argc, char *argv[])
     if (!f)
     {
         fprintf(stderr, "Failed to open the file %s\n", output_file);
+        free(source);
+        free(bytecode);
         return -1;
     }
 
-    fwrite(bytecode, 1, bytecode_len, f);
+    // Write object file with embedded source code and line table
+    if (!objfile_write_with_debug(f, source, bytecode, bytecode_len, line_table))
+    {
+        fprintf(stderr, "Failed to write object file: %s\n", output_file);
+        fclose(f);
+        free(source);
+        free(bytecode);
+        return 1;
+    }
+
     fclose(f);
+    free(source);
+    free(bytecode);
 
     return 0;
 }

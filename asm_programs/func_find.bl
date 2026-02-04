@@ -1,0 +1,82 @@
+    push array           ; arg 1
+    push 2               ; arg 2
+    get array_size       ;
+    get REF              ;
+    push ACC             ; arg 3
+    push CUR             ; arg 4 ret addr
+    jmp array_find       ; has arg 1 in the stack
+    pop ACC              ; 
+    get REF              ;
+
+    push ACC
+    push CUR
+    jmp print_int       ; print it
+    halt
+
+__f_ret_void:
+    pop ACC             ; pop return address to acc
+    add 3               ; jmp <label> takes 2 bytes
+    jmp ACC
+
+__f_ret_RG0_u8:
+    pop ACC
+    add 3
+    push RG0            ; push return value
+    jmp ACC
+
+array_find:
+    pop RG3             ; pop ret addr      arg 4
+    pop RG1             ; pop array_size    arg 3
+    pop RG2             ; pop search value  arg 2 
+    pop ACC             ; pop arr addr      arg 1
+    push RG3            ; stash ret addr
+__array_find_loop:
+    put RG0             ; save arr addr to rg0
+    get REF             ; acc = arr[acc]
+
+    sub RG2             
+    jez __array_find_ret    ; ret if equal
+
+    get RG1                 ; reduce length
+    sub 1
+    put RG1                 ; save
+    get RG0                 ; advance pointer further
+    add 1
+    jnz __array_find_loop   ; if outa loop
+    get 0xff
+    put RG0
+__array_find_ret:
+    ; rg0 already has the address of the thing
+    jmp __f_ret_RG0_u8
+
+
+
+
+; 1 arg - number to print
+; returns nothing
+; uses RG3, RG0 for temporary storage
+print_int: 
+    pop RG1                     ; return addr 
+    pop ACC                     ; number 
+__print_int_parse_loop: 
+    put RG0                     ; save 
+    mod 10                      ; 1 decimal 
+    add '0'                     ; to char 
+    push ACC                    ; save to the stack 
+    jof __print_int_loop        ; print if full 
+    get RG0                     ; restore 
+    div 10                      ; 1 decimal less 
+    jnz __print_int_parse_loop  ; again 
+__print_int_loop: 
+    pop ACC
+    put DWN                     ; rewind and put down 
+    jnz __print_int_loop 
+__print_int_ret: 
+    get RG1
+    add 3 
+    jmp ACC 
+
+array: 
+. [ 0 1 2 3 4 5 6 7 8 9 ]
+array_size:
+. [ 10 ]

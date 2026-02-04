@@ -6,6 +6,7 @@
 
 #include "../include/definitions.h"
 #include "../include/utils.h"
+#include "../include/objfile.h"
 
 u8 string_to_side(const char *str)
 {
@@ -123,8 +124,9 @@ int main(int argc, char *argv[])
 
     void *bytecode = NULL;
     u8 bytecode_len = 0;
+    u16 line_table[MAX_BYTECODE_SIZE] = {};
 
-    if (!assemble_program(source, &bytecode, &bytecode_len))
+    if (!assemble_program(source, &bytecode, &bytecode_len, line_table))
     {
         fprintf(stderr, "Assembly failed, all tokens:\n");
 

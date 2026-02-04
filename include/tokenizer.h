@@ -61,7 +61,7 @@ typedef struct
     int value;      // numeric value for numbers
 } token;
 
-#define encode_instruction(opcode, target) ((target & 0x0F) << 4) | (opcode & 0x0F)
+#define INSTRUCTION(opcode, target) ((target & 0x0F) << 4) | (opcode & 0x0F)
 
 const char *tok_to_str(token_type t);
 bool is_valid_opcode(const char *str);

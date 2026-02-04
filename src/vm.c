@@ -1,6 +1,7 @@
 #include "../include/definitions.h"
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 block *grid_step_block(const grid *g, const u8 x, const u8 y, const u8 side)
 {
@@ -319,8 +320,8 @@ void block_iter_exec_op(const grid *g, block *b, u8 x, u8 y)
             advance_to++;
             break;
         case REF:;
-            // when used with writing instructions PUT and POP, ACC value will be used as an address, and RG3 will be written to said address in bytecode
-            // should illegal to write to bytecode but u can use dat as memory mebe
+            // when used with writing instructions PUT and POP, ACC value will be used as an address, and RG3 will be
+            // written to said address in bytecode should illegal to write to bytecode but u can use dat as memory mebe
             const u8 addr = operand_value;
 
             const bool toofar = addr > b->length;
@@ -505,7 +506,12 @@ void print_block_state(u8 x, u8 y, block *b)
            target_str(i.target));
     printf("a:%3d r0:%3d r1:%3d r2:%3d r3:%3d ", b->accumulator, b->registers[0], b->registers[1], b->registers[2],
            b->registers[3]);
-    printf("wait:%3d\n", b->waiting_ticks);
+    // printf("wait:%3d\n", b->waiting_ticks);
+    printf("wait:%3d ", b->waiting_ticks);
+    printf("stk:[");
+    for (u8 s = 0; s <= b->stack_top; s++)
+        printf("%d%s", b->stack[(u8)s], s == b->stack_top ? "" : ",");
+    printf("]\n");
 }
 
 /*
@@ -556,10 +562,22 @@ void run_grid(grid *g, u32 max_ticks)
             };
     }
 
+    // char c = 0;
+
     while (true)
     {
-        if (g->debug)
-            printf("tick %d\n", g->ticks);
+        // if (g->debug && c != 'c')
+        // {
+        //     // accept input to step
+        //     c = getchar();
+
+        //     if (c == 'q')
+        //         exit(0);
+        //     if (c == '\n' || c == 'c')
+        //     {
+        //         // continue
+        //     }
+        // }
         g->any_ticked = false;
         grid_iterate(g);
 

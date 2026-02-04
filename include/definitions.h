@@ -149,7 +149,7 @@ void debug_tokenize(const char *src);
 
 // Assembler
 
-bool assemble_program(const char *source, void **dest, u8 *out_len);
+bool assemble_program(const char *source, void **dest, u8 *out_len, u16 *line_table);
 
 #define CASE(x)                                                                                                        \
     case x:                                                                                                            \
