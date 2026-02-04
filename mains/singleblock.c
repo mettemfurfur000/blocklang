@@ -337,8 +337,10 @@ int main(int argc, char *argv[])
         for (;;)
         {
             if (!run_immediately)
+            {
                 printf("> ");
-            fgets((void *)in_buffer, 255, stdin);
+                fgets((void *)in_buffer, 255, stdin);
+            }
 
             run_grid(g, TICK_LIMIT);
 

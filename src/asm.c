@@ -61,7 +61,8 @@ void bytecode_write(u8 *bytecode, u8 value, u16 *line_table, u8 *instruction_ind
     line_table[*instruction_index] = cur_line;
 
     (*instruction_index)++;
-    printf("Line %d [%d] = %02x / %c\n", cur_line, *instruction_index - 1, value, value >= 32 && value <= 126 ? value : '.');
+    // debug output
+    // printf("Line %d [%d] = %02x / %c\n", cur_line, *instruction_index - 1, value, value >= 32 && value <= 126 ? value : '.');
 }
 
 bool assemble_program(const char *source, void **dest, u8 *out_len, u16 *line_table)
@@ -374,8 +375,6 @@ bool assemble_program(const char *source, void **dest, u8 *out_len, u16 *line_ta
     look_for_unused_labels(labels, total_labels);
 
     // Output results
-
-    printf("Assembled program length: %d bytes\n", program_length);
 
     if (dest)
     {

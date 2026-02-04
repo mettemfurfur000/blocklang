@@ -1,5 +1,5 @@
     push array           ; arg 1
-    push 2               ; arg 2
+    push 3               ; arg 2
     get array_size       ;
     get REF              ;
     push ACC             ; arg 3
@@ -39,10 +39,12 @@ __array_find_loop:
 
     get RG1                 ; reduce length
     sub 1
+    jez __array_find_error  ; jump if 0
     put RG1                 ; save
     get RG0                 ; advance pointer further
     add 1
     jnz __array_find_loop   ; if outa loop
+__array_find_error:         ; out of array bounds
     get 0xff
     put RG0
 __array_find_ret:
