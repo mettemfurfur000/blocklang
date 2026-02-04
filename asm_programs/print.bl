@@ -24,4 +24,4 @@ __print_ret:
     jmp ACC
 
 message: 
-."Test string to check printing"
+."Test string to check\tprinting"

@@ -120,13 +120,13 @@ void display_debug_ui(grid *g, const block_object_file *obj, const u8 *out_buffe
     offset += snprintf(frame + offset, FRAME_BUFFER_SIZE - offset, "\n--- OUTPUT ---\n");
     offset += snprintf(frame + offset, FRAME_BUFFER_SIZE - offset, "%.256s\n", out_buffer);
 
-    offset += snprintf(frame + offset, FRAME_BUFFER_SIZE - offset, "\n--- COMMANDS ---\n");
-    offset += snprintf(frame + offset, FRAME_BUFFER_SIZE - offset, "s - step one instruction\n");
-    offset += snprintf(frame + offset, FRAME_BUFFER_SIZE - offset, "c - continue execution\n");
-    offset += snprintf(frame + offset, FRAME_BUFFER_SIZE - offset, "r - reset program\n");
-    offset += snprintf(frame + offset, FRAME_BUFFER_SIZE - offset, "l - clear screen\n");
-    offset += snprintf(frame + offset, FRAME_BUFFER_SIZE - offset, "q - quit\n");
-    offset += snprintf(frame + offset, FRAME_BUFFER_SIZE - offset, "> ");
+    // offset += snprintf(frame + offset, FRAME_BUFFER_SIZE - offset, "\n--- COMMANDS ---\n");
+    // offset += snprintf(frame + offset, FRAME_BUFFER_SIZE - offset, "s - step one instruction\n");
+    // offset += snprintf(frame + offset, FRAME_BUFFER_SIZE - offset, "c - continue execution\n");
+    // offset += snprintf(frame + offset, FRAME_BUFFER_SIZE - offset, "r - reset program\n");
+    // offset += snprintf(frame + offset, FRAME_BUFFER_SIZE - offset, "l - clear screen\n");
+    // offset += snprintf(frame + offset, FRAME_BUFFER_SIZE - offset, "q - quit\n");
+    // offset += snprintf(frame + offset, FRAME_BUFFER_SIZE - offset, "> ");
 
     // Write entire frame atomically
     fwrite(frame, 1, offset, stdout);
@@ -294,6 +294,7 @@ int main(int argc, char *argv[])
             case '?':
             {
                 printf("\nCommands:\n");
+                printf("  i - change the input buffer\n");
                 printf("  s - step one instruction\n");
                 printf("  c - continue execution\n");
                 printf("  r - reset program\n");
@@ -309,6 +310,21 @@ int main(int argc, char *argv[])
                 // Clear screen
                 printf("\033[2J\033[H");
                 fflush(stdout);
+                display_debug_ui(g, &obj, out_buffer);
+                break;
+            }
+            case 'i':
+            case 'I':
+            {
+                // Change input buffer
+                printf("Current input buffer: %.255s\n", in_buffer);
+                printf("Enter new input (max 255 chars): ");
+                getchar(); // consume leftover newline
+                fgets((char *)in_buffer, 255, stdin);
+                // Remove newline if present
+                size_t len = strlen((char *)in_buffer);
+                if (len > 0 && in_buffer[len - 1] == '\n')
+                    in_buffer[len - 1] = '\0';
                 display_debug_ui(g, &obj, out_buffer);
                 break;
             }

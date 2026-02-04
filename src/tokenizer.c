@@ -120,11 +120,50 @@ const char *tok_to_str(token_type t)
         tok.type = tok_type;                                                                                           \
         s += 2;                                                                                                        \
         *src = s;                                                                                                      \
-        tok.text[0] = symbol1;                                                                                          \
-        tok.text[1] = symbol2;                                                                                          \
+        tok.text[0] = symbol1;                                                                                         \
+        tok.text[1] = symbol2;                                                                                         \
         tok.text[2] = '\0';                                                                                            \
         return tok;                                                                                                    \
     }
+
+char handle_escape_sequence(char *s)
+{
+    if (*s == '\\') // escape sequence
+    {
+        s++; // char after backslash
+        switch (*s)
+        {
+        case 'a':
+            return 0x07;
+        case 'b':
+            return 0x08;
+        case 'e':
+            return 0x1b;
+        case 'f':
+            return 0x0c;
+        case 'n':
+            return 0x0a;
+        case 'r':
+            return 0x0d;
+        case 't':
+            return 0x09;
+        case 'v':
+            return 0x0B;
+        case '\\':
+            return '\\';
+        case '\'':
+            return '\'';
+        case '\"':
+            return '\"';
+        case '\?':
+            return '\?';
+        default:
+            return -1; // unknown escape sequence
+        }
+    }
+    else // a character
+        return *s;
+}
 
 // Advances the source pointer and returns the next token
 token next_token(const char **src, int *lines_ret)
@@ -275,56 +314,16 @@ token next_token(const char **src, int *lines_ret)
     if (*s == '\'')
     {
         tok.type = TOK_CHAR_LITERAL;
-        s++;            // first literal
-        if (*s == '\\') // escape sequence
-        {
-            s++; // char after backslash
-            switch (*s)
-            {
-            case 'a':
-                tok.text[0] = 0x07;
-                break;
-            case 'b':
-                tok.text[0] = 0x08;
-                break;
-            case 'e':
-                tok.text[0] = 0x1b;
-                break;
-            case 'f':
-                tok.text[0] = 0x0c;
-                break;
-            case 'n':
-                tok.text[0] = 0x0a;
-                break;
-            case 'r':
-                tok.text[0] = 0x0d;
-                break;
-            case 't':
-                tok.text[0] = 0x09;
-                break;
-            case 'v':
-                tok.text[0] = 0x0B;
-                break;
-            case '\\':
-                tok.text[0] = '\\';
-                break;
-            case '\'':
-                tok.text[0] = '\'';
-                break;
-            case '\"':
-                tok.text[0] = '\"';
-                break;
-            case '\?':
-                tok.text[0] = '\?';
-                break;
-            default:
-                fprintf(stderr, "Unknown escape sequence symbol: \"%c\" at position %d\n", *s, (int)(s - *src));
-                exit(1);
-            }
-        }
-        else // a character
-            tok.text[0] = *s;
+        s++; // first literal
 
+        char c = handle_escape_sequence((char *)s);
+        if (c == -1)
+        {
+            fprintf(stderr, "Unknown escape sequence in character literal at position %d\n", (int)(s - *src));
+            exit(1);
+        }
+
+        tok.text[0] = c;
         tok.text[1] = '\0';
 
         s++; // single quote?
@@ -354,7 +353,27 @@ token next_token(const char **src, int *lines_ret)
             fprintf(stderr, "Warning: token is too ling: %s\n", tok.text);
             len = sizeof(tok.text) - 1;
         }
-        strncpy(tok.text, start, len);
+
+        size_t out_index = 0;
+        for (size_t i = 0; i < len; i++)
+        {
+            if (start[i] == '\\')
+            {
+                char esc = handle_escape_sequence((char *)&start[i]);
+                if (esc == -1)
+                {
+                    fprintf(stderr, "Unknown escape sequence in string literal at position %d\n", (int)(s - *src));
+                    exit(1);
+                }
+                tok.text[out_index++] = esc;
+                i++; // skip next character as it's part of the escape sequence
+            }
+            else
+            {
+                tok.text[out_index++] = start[i];
+            }
+        }
+        
         tok.text[len] = '\0';
         s++;
 
