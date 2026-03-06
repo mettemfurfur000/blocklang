@@ -65,7 +65,7 @@ __print_int_parse_loop:
     jnz __print_int_parse_loop  ; again 
 __print_int_loop: 
     pop ACC
-    put DWN                     ; rewind and put down 
+    put DOWN                     ; rewind and put down 
     jnz __print_int_loop 
 __print_int_ret: 
     get RG1
@@ -81,7 +81,7 @@ print:
 __print_loop:
     put RG0             ; save string pointer
     get REF             ; get a byte from the message label, overrides our pointer
-    put DWN             ; put down what was here
+    put DOWN             ; put down what was here
     jez __print_ret     ; if \0 we end
     jof __print_ret     ; there might be an overflow issue with putting values to slots...
     get RG0             ; restore the pointer

@@ -1,0 +1,26 @@
+make clean codegen_test
+rm build/*
+rm obj/*
+/c/msys64/mingw64/bin/gcc.exe -O0 -Wall -Wpedantic -fanalyzer -g -pg -no-pie -c src/./asm.c -o obj/./asm.o
+/c/msys64/mingw64/bin/gcc.exe -O0 -Wall -Wpedantic -fanalyzer -g -pg -no-pie -c src/./base.c -o obj/./base.o
+/c/msys64/mingw64/bin/gcc.exe -O0 -Wall -Wpedantic -fanalyzer -g -pg -no-pie -c src/./codegen.c -o obj/./codegen.o
+src/./codegen.c: In function 'gen_expression':
+src/./codegen.c:291:21: warning: unused variable 'ret_label' [-Wunused-variable]
+  291 |         const char *ret_label = gen_label();
+      |                     ^~~~~~~~~
+/c/msys64/mingw64/bin/gcc.exe -O0 -Wall -Wpedantic -fanalyzer -g -pg -no-pie -c src/./debug.c -o obj/./debug.o
+/c/msys64/mingw64/bin/gcc.exe -O0 -Wall -Wpedantic -fanalyzer -g -pg -no-pie -c src/./objfile.c -o obj/./objfile.o
+/c/msys64/mingw64/bin/gcc.exe -O0 -Wall -Wpedantic -fanalyzer -g -pg -no-pie -c src/./parser.c -o obj/./parser.o
+/c/msys64/mingw64/bin/gcc.exe -O0 -Wall -Wpedantic -fanalyzer -g -pg -no-pie -c src/./tokenizer.c -o obj/./tokenizer.o
+/c/msys64/mingw64/bin/gcc.exe -O0 -Wall -Wpedantic -fanalyzer -g -pg -no-pie -c src/./utils.c -o obj/./utils.o
+/c/msys64/mingw64/bin/gcc.exe -O0 -Wall -Wpedantic -fanalyzer -g -pg -no-pie -c src/./vm.c -o obj/./vm.o
+src/./vm.c: In function 'block_exec_instruction_mono':
+src/./vm.c:621:8: warning: unused variable 'operand_value' [-Wunused-variable]
+  621 |     u8 operand_value = 0;
+      |        ^~~~~~~~~~~~~
+/c/msys64/mingw64/bin/gcc.exe -O0 -Wall -Wpedantic -fanalyzer -g -pg -no-pie -c mains/codegen_test.c -o obj/main_codegen_test.o
+mains/codegen_test.c: In function 'test_codegen':
+mains/codegen_test.c:35:10: warning: unused variable 'ok' [-Wunused-variable]
+   35 |     bool ok = assemble_program(output, (void **)&bytecode , &bytecode_len, line_table);
+      |          ^~
+/c/msys64/mingw64/bin/gcc.exe -O0 -Wall -Wpedantic -fanalyzer -g -pg -no-pie -o build/codegen_test obj/./asm.o obj/./base.o obj/./codegen.o obj/./debug.o obj/./objfile.o obj/./parser.o obj/./tokenizer.o obj/./utils.o obj/./vm.o obj/main_codegen_test.o -lm -g -pg -LC:/msys64/mingw64/lib -lmingw32 -lws2_32

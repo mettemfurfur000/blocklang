@@ -1,11 +1,8 @@
 #include <assert.h>
-#include <ctype.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <unistd.h>
 
-#include "../include/definitions.h"
 #include "../include/parser.h"
 #include "../include/utils.h"
 
@@ -37,6 +34,10 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Failed to read source file: %s\n", input_file);
         return 1;
     }
+
+    printf("debug tokens:\n");
+    debug_tokenize(source);
+    printf("\nnodes:\n");
 
     node root = parse_program(source);
 

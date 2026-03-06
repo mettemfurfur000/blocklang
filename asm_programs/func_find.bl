@@ -71,7 +71,7 @@ __print_int_parse_loop:
     jnz __print_int_parse_loop  ; again 
 __print_int_loop: 
     pop ACC
-    put DWN                     ; rewind and put down 
+    put DOWN                     ; rewind and put down 
     jnz __print_int_loop 
 __print_int_ret: 
     get RG1

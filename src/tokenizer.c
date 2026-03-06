@@ -11,7 +11,7 @@ static const char *valid_opcodes[] = {"nop", "wait", "add", "sub", "mlt", "div",
                                       "put", "push", "pop", "jmp", "jez", "jnz", "jof", "halt"};
 
 static const char *valid_targets[] = {"STK", "ACC", "RG0", "RG1", "RG2", "RG3", "ADJ", "UP",
-                                      "RIG", "DWN", "LFT", "ANY", "NIL", "SLN", "CUR", "REF"};
+                                      "RIGHT", "DOWN", "LEFT", "ANY", "NIL", "SLN", "CUR", "REF"};
 
 int string_to_opcode(const char *str)
 {

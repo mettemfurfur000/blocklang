@@ -1,7 +1,7 @@
 #include "../include/definitions.h"
+
 #include <stdbool.h>
 #include <stdio.h>
-#include <stdlib.h>
 
 block *grid_step_block(const grid *g, const u8 x, const u8 y, const u8 side)
 {
@@ -101,11 +101,11 @@ void block_iter_pre_move(grid *g, block *b, const u8 x, const u8 y)
 
     switch (i.target)
     {
-    case UP:  // up block / slot
-    case RIG: // right block / slot
-    case DWN: // down block / slot
-    case LFT: // left block / slot
-    case ANY: // to/from anyone ready to perform n transfer
+    case UP:    // up block / slot
+    case RIGHT: // right block / slot
+    case DOWN:  // down block / slot
+    case LEFT:  // left block / slot
+    case ANY:   // to/from anyone ready to perform n transfer
         b->transfer_side = i.target - UP;
         break;
     default:
@@ -442,6 +442,227 @@ void block_iter_exec_op(const grid *g, block *b, u8 x, u8 y)
     b->current_instruction = advance_to >= b->length ? b->length - 1 : advance_to;
 }
 
+u8 block_get_transfer_side(const instruction i)
+{
+    switch (i.target)
+    {
+    case UP:    // up block / slot
+    case RIGHT: // right block / slot
+    case DOWN:  // down block / slot
+    case LEFT:  // left block / slot
+    case ANY:   // to/from anyone ready to perform n transfer
+        return i.target - UP;
+        break;
+    default:
+        // no block interactions needed
+        return invalid;
+    }
+}
+
+bool is_target_used(instruction i)
+{
+    switch (i.operation)
+    {
+    case NOP:
+    case JOF:
+    case HALT:
+        return false;
+    }
+    return true;
+}
+
+bool is_writing(instruction i)
+{
+    switch (i.operation) // if operation requires writing to target:
+    {
+    case PUT:
+    case POP:
+        return true;
+    }
+    return false;
+}
+
+u8 block_pop_stack(block *b)
+{
+    if (b->stack_top < 0)
+    {
+        b->last_caused_overflow = true;
+        return 0;
+    }
+    return b->stack[(u8)b->stack_top--];
+}
+
+void block_push_stack(block *b, u8 value)
+{
+    if (b->stack_top >= 15)
+    {
+        b->last_caused_overflow = true;
+        return;
+    }
+
+    b->stack[(u8)b->stack_top++] = value;
+}
+
+void block_write_to_any(grid *g, block *b, u8 x, u8 y, u8 value)
+{
+    io_slot *slot = NULL;
+    for (u8 s = up; s <= left; s++)
+    {
+        slot = grid_step_edge(g, x, y, s);
+        if (slot && can_write(slot))
+        {
+            write_byte(slot, b->transfer_value);
+            return;
+        }
+    }
+}
+
+u8 block_get_instruction_write_operand(block *b, instruction i)
+{
+    switch (i.operation) // if operation requires writing to target:
+    {
+    case PUT:
+        return b->accumulator;
+    case POP:
+        return block_pop_stack(b);
+    }
+    assert(0);
+}
+
+void block_write_to_side(grid *g, block *b, u8 x, u8 y, side side, u8 value)
+{
+    if (side == any)
+    {
+        block_write_to_any(g, b, x, y, value);
+        return;
+    }
+
+    io_slot *slot = grid_step_edge(g, x, y, side);
+
+    if (!slot)
+        return;
+
+    if (can_write(slot))
+    {
+        write_byte(slot, value);
+        return;
+    }
+
+    // TODO: add writing to ther blocks
+
+    /*
+    idea:
+
+    [ PUT RIGHT ] -> [ GET LEFT ]
+     ^
+     Current block being ran checks the RIGHT block if it has a __reading__ operation from the LEFT, then puts its
+    operand value to the right block
+    */
+
+    assert(0);
+    b->last_caused_overflow = true;
+}
+
+void block_write_to_target(grid *g, block *b, instruction i, u8 value)
+{
+    switch (i.target)
+    {
+    case STK:
+        if (b->stack_top < 0)
+            b->last_caused_overflow = true;
+        else
+            b->stack[(u8)b->stack_top] = value;
+        break;
+    case ACC:
+        b->accumulator = value; // from acc to acc?
+        break;
+    case RG0:
+    case RG1:
+    case RG2:
+    case RG3:
+        b->registers[i.target - RG0] = value;
+        break;
+    case ADJ:
+        // should be illegal but wat do i know
+        ((u8 *)(b->bytecode))[b->current_instruction + 1] = value;
+        // when putting, operand value usualy comes from an accumulator
+        b->current_instruction++;
+        break;
+    case REF:;
+        // when used with writing instructions PUT and POP, ACC value will be used as an address, and RG3 will be
+        // written to said address in bytecode should illegal to write to bytecode but u can use dat as memory mebe
+        const u8 addr = value;
+
+        const bool toofar = addr > b->length;
+
+        b->last_caused_overflow = toofar ? true : false;
+        if (!toofar)
+            ((u8 *)(b->bytecode))[addr] = b->registers[3];
+        break;
+    case NIL:
+        // nothing
+        break;
+    case SLN:
+        // nothing
+        break;
+    }
+}
+
+void block_exec_instruction_mono(grid *g, block *b, u8 x, u8 y)
+{
+    const instruction i = b->bytecode[b->current_instruction];
+
+    if (i.operation == HALT)
+    {
+        b->state_halted = true;
+        return;
+    }
+
+    u8 operand_value = 0;
+    u8 advance_to = b->current_instruction + 1;
+
+    // logic
+
+    u8 transfer_side = block_get_transfer_side(i);
+    bool target_needed = is_target_used(i);
+    bool io_needed = target_needed && (transfer_side != invalid);
+
+    bool is_writing_op = is_writing(i);
+
+    if (is_writing_op)
+    {
+        u8 value = block_get_instruction_write_operand(b, i);
+        if (io_needed)
+            block_write_to_side(g, b, x, y, transfer_side, value);
+        else
+            block_write_to_target(g, b, i, value);
+    }
+
+    // TODO: reading operations
+
+    b->current_instruction = advance_to >= b->length ? b->length - 1 : advance_to;
+}
+
+void block_iter_mono(grid *g, block *b, u8 x, u8 y)
+{
+    if (!b->bytecode || b->state_halted)
+        return;
+
+    g->any_ticked = true;
+
+    if (b->waiting_ticks)
+    {
+        b->waiting_ticks--;
+        return;
+    }
+
+    if (b->current_instruction >= b->length)
+        b->current_instruction = 0;
+
+    // exec
+    block_exec_instruction_mono(g, b, x, y);
+}
+
 const char *op_code_str(u8 opcode)
 {
     switch (opcode)
@@ -479,9 +700,9 @@ const char *target_str(u8 target)
         CASE(RG3)
         CASE(ADJ)
         CASE(UP)
-        CASE(RIG)
-        CASE(DWN)
-        CASE(LFT)
+        CASE(RIGHT)
+        CASE(DOWN)
+        CASE(LEFT)
         CASE(ANY)
         CASE(NIL)
         CASE(SLN)
@@ -562,22 +783,8 @@ void run_grid(grid *g, u32 max_ticks)
             };
     }
 
-    // char c = 0;
-
     while (true)
     {
-        // if (g->debug && c != 'c')
-        // {
-        //     // accept input to step
-        //     c = getchar();
-
-        //     if (c == 'q')
-        //         exit(0);
-        //     if (c == '\n' || c == 'c')
-        //     {
-        //         // continue
-        //     }
-        // }
         g->any_ticked = false;
         grid_iterate(g);
 

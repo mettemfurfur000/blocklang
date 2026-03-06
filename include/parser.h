@@ -30,7 +30,7 @@ struct node
     u8 child_count;
     union
     {
-        u8 number_value;
+        u32 number_value;
         char string[64];
     };
 };

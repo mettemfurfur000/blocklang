@@ -39,17 +39,18 @@ typedef enum
     RG1,
     RG2,
     RG3,
-    ADJ, // represents next byte in a program, read only, and program counter will skip next byte automaticaly
-    UP,  // up block / slot
-    RIG, // right block / slot
-    DWN, // down block / slot
-    LFT, // left block / slot
-    ANY, // to anyone ready to perform an transfer
-    NIL, // always zero, if chosen as destination, consumes input
-    SLN, // represents the number of elements on the stack
-    CUR, // represents current address of an instruction
-    REF, // represents a byte that is located in bytecode dictated at ACC offset
-    // when used with writing instructions PUT and POP, ACC value will be used as an address, and RG3 will be written to said address in bytecode
+    ADJ,   // represents next byte in a program, read only, and program counter will skip next byte automaticaly
+    UP,    // up block / slot
+    RIGHT, // right block / slot
+    DOWN,  // down block / slot
+    LEFT,  // left block / slot
+    ANY,   // to anyone ready to perform an transfer
+    NIL,   // always zero, if chosen as destination, consumes input
+    SLN,   // represents the number of elements on the stack
+    CUR,   // represents current address of an instruction
+    REF,   // represents a byte that is located in bytecode dictated at ACC offset
+    // when used with writing instructions PUT and POP, ACC value will be used as an address, and RG3 will be written to
+    // said address in bytecode
     TARGET_GUARD_LAST
 } targets;
 
@@ -62,19 +63,19 @@ typedef enum
 {
     NOP,  // does nothing, but spends a tick
     WAIT, // from target - wait for ticks
-    ADD, // from target - add to ACC
-    SUB, // from target - sub from ACC
-    MLT, // from target - mult ACC by target
-    DIV, // from target - divide ACC by target
-    MOD, // from target - get remainder of a division
+    ADD,  // from target - add to ACC
+    SUB,  // from target - sub from ACC
+    MLT,  // from target - mult ACC by target
+    DIV,  // from target - divide ACC by target
+    MOD,  // from target - get remainder of a division
     GET,  // from target to ACC
     PUT,  // from ACC to target
     PUSH, // from target push to stack
     POP,  // from stack pop to target
-    JMP, // jump to said position in a program (if:)
-    JEZ, // jump if ACC equals zero
-    JNZ, // jump if ACC is not zero
-    JOF, // jump if last operation caused an overflow or underflow
+    JMP,  // jump to said position in a program (if:)
+    JEZ,  // jump if ACC equals zero
+    JNZ,  // jump if ACC is not zero
+    JOF,  // jump if last operation caused an overflow or underflow
     HALT, // stops execution
     OP_GUARD_LAST
 } operations;
@@ -154,5 +155,17 @@ bool assemble_program(const char *source, void **dest, u8 *out_len, u16 *line_ta
 #define CASE(x)                                                                                                        \
     case x:                                                                                                            \
         return #x;
+
+#define SEPARATOR '/'
+#define SEPARATOR_STR "/"
+#define __FILENAME__ (strrchr(__FILE__, SEPARATOR) ? strrchr(__FILE__, SEPARATOR) + 1 : __FILE__)
+
+#define ERROR(format, ...) printf("%s:%d " format, __FILENAME__, __LINE__, ##__VA_ARGS__);
+#define ERROR_ABORT(format, ...)                                                                                       \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        ERROR(format, ##__VA_ARGS__);                                                                                  \
+        exit(-1);                                                                                                      \
+    }while(0);
 
 #endif

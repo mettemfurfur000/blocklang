@@ -28,9 +28,9 @@ Value	Symbol	Description
 5	RG3	General purpose register 3
 6	ADJ	Immediate byte following the instruction
 7	UP	Neighboring block/slot above
-8	RIG	Neighboring block/slot to the right
-9	DWN	Neighboring block/slot below
-10	LFT	Neighboring block/slot to the left
+8	RIGHT	Neighboring block/slot to the right
+9	DOWN	Neighboring block/slot below
+10	LEFT	Neighboring block/slot to the left
 11	ANY	Any ready neighbour (not used in current VM)
 12	NIL	Constant zero – consumes input when used as a destination
 
@@ -131,7 +131,7 @@ opcode       ::= 'NOP' | 'WAIT' | 'ADD' | 'SUB' | 'MLT' | 'DIV' | 'MOD'
                | 'GET' | 'PUT' | 'PUSH' | 'POP'
                | 'JMP' | 'JEZ' | 'JNZ' | 'JOF' | 'HALT'
 target       ::= 'STK' | 'ACC' | 'RG0' | 'RG1' | 'RG2' | 'RG3'
-               | 'ADJ' | 'UP' | 'RIG' | 'DWN' | 'LFT' | 'ANY'
+               | 'ADJ' | 'UP' | 'RIGHT' | 'DOWN' | 'LEFT' | 'ANY'
                | 'NIL' 
 number       ::= decimal_literal | hex_literal
 identifier   ::= letter {letter | digit | '_' }

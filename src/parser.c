@@ -8,7 +8,7 @@
 // NODE MANAGEMENT
 // ============================================================================
 
-static node budget[1024] = {};
+static node parse_nodes[1024] = {};
 static u32 last_node = 0;
 static u32 error_count = 0;
 
@@ -41,15 +41,15 @@ void free_nodes()
 {
     last_node = 0;
     error_count = 0;
-    memset(budget, 0, sizeof(budget));
+    memset(parse_nodes, 0, sizeof(parse_nodes));
 }
 
 node *new_node(node_type type)
 {
-    assert(last_node < sizeof(budget) / sizeof(budget[0]));
+    assert(last_node < sizeof(parse_nodes) / sizeof(parse_nodes[0]));
     assert(type >= 0 && type < NODE_PROGRAM + 1);
 
-    node *retptr = budget + last_node;
+    node *retptr = parse_nodes + last_node;
     *retptr = (node){};
     retptr->type = type;
     retptr->child_count = 0;
@@ -62,15 +62,15 @@ node *new_node(node_type type)
 
 u16 node_index(node *p)
 {
-    if (!p || p < budget || p > budget + last_node)
+    if (!p || p < parse_nodes || p > parse_nodes + last_node)
         return 0;
-    return (u16)(p - budget);
+    return (u16)(p - parse_nodes);
 }
 
 node *get_node_by_index(u16 index)
 {
     assert(index < last_node);
-    return &budget[index];
+    return &parse_nodes[index];
 }
 
 void add_child(node *parent, node *child)
@@ -103,10 +103,12 @@ typedef struct
     bool had_error;
 } parse_state;
 
+#define __FILENAME__ (strrchr(__FILE__, SEPARATOR) ? strrchr(__FILE__, SEPARATOR) + 1 : __FILE__)
+
 #define COMPILER_ERROR(format, ...)                                                                                    \
     do                                                                                                                 \
     {                                                                                                                  \
-        fprintf(stderr, "Line %d: " format "\n", st->line, ##__VA_ARGS__);                                             \
+        fprintf(stderr, "%s:%d - Line %d: " format "\n", __FILENAME__, __LINE__, st->line, ##__VA_ARGS__);             \
         error_count++;                                                                                                 \
         st->had_error = true;                                                                                          \
     } while (0)
@@ -119,17 +121,17 @@ void advance_token(parse_state *st)
     } while (st->current.type == TOK_COMMENT);
 }
 
-bool check(parse_state *st, token_type type)
+bool is_type(parse_state *st, token_type type)
 {
     return st->current.type == type;
 }
 
 bool match(parse_state *st, token_type type)
 {
-    if (!check(st, type))
-        return false;
-    advance_token(st);
-    return true;
+    bool result = is_type(st, type);
+    if (result)
+        advance_token(st);
+    return result;
 }
 
 node *create_node_from_token(parse_state *st, node_type type)
@@ -213,6 +215,21 @@ static precedence get_precedence(token_type type)
     }
 }
 
+#define PARSE_EXPECT(tok_type, message)                                                                                \
+    if (!match(st, tok_type))                                                                                          \
+    {                                                                                                                  \
+        printf("expected %s, got %s\n", tok_to_str(tok_type), tok_to_str(st->current.type));                           \
+        COMPILER_ERROR(message);                                                                                       \
+        return (node){};                                                                                               \
+    }
+
+#define PARSE_EXPECT_DONT_EAT(type, message)                                                                           \
+    if (!is_type(st, type))                                                                                            \
+    {                                                                                                                  \
+        COMPILER_ERROR(message);                                                                                       \
+        return (node){};                                                                                               \
+    }
+
 // Null denotation: prefix operators and primary expressions
 static node parse_primary(parse_state *st)
 {
@@ -220,24 +237,24 @@ static node parse_primary(parse_state *st)
         return (node){};
 
     // Numbers
-    if (check(st, TOK_NUMBER))
+    if (is_type(st, TOK_NUMBER))
         return *create_node_from_token(st, NODE_NUMBER);
 
     // Character literals
-    if (check(st, TOK_CHAR_LITERAL))
+    if (is_type(st, TOK_CHAR_LITERAL))
         return *create_node_from_token(st, NODE_CHAR);
 
     // String literals
-    if (check(st, TOK_STRING))
+    if (is_type(st, TOK_STRING))
         return *create_node_from_token(st, NODE_STRING);
 
     // Array literal: [1, 2, 3]
-    if (check(st, TOK_SQUARE_BRACKET_LEFT))
+    if (is_type(st, TOK_SQUARE_BRACKET_LEFT))
     {
         advance_token(st);
         node *array = new_node(NODE_ARRAY);
 
-        if (!check(st, TOK_SQUARE_BRACKET_RIGHT))
+        if (!is_type(st, TOK_SQUARE_BRACKET_RIGHT))
         {
             do
             {
@@ -252,34 +269,26 @@ static node parse_primary(parse_state *st)
             } while (match(st, TOK_COMMA));
         }
 
-        if (!match(st, TOK_SQUARE_BRACKET_RIGHT))
-        {
-            COMPILER_ERROR("Expected ']' to close array literal");
-            return (node){};
-        }
+        PARSE_EXPECT(TOK_SQUARE_BRACKET_RIGHT, "Expected ']' to close array literal")
 
         return *array;
     }
 
     // Parenthesized expression
-    if (check(st, TOK_BRACKET_LEFT))
+    if (is_type(st, TOK_BRACKET_LEFT))
     {
         advance_token(st);
         node expr = parse_expression(st, PREC_NONE);
         if (st->had_error)
             return (node){};
 
-        if (!match(st, TOK_BRACKET_RIGHT))
-        {
-            COMPILER_ERROR("Expected ')' to close expression");
-            return (node){};
-        }
+        PARSE_EXPECT(TOK_BRACKET_RIGHT, "Expected ')' to close expression");
         return expr;
     }
 
     // Unary operators: -, !, ~, *, &
-    if (check(st, TOK_MINUS) || check(st, TOK_EXCLAMATION_MARK) || check(st, TOK_TILDA) || check(st, TOK_ASTERISK) ||
-        check(st, TOK_AMPERSAND))
+    if (is_type(st, TOK_MINUS) || is_type(st, TOK_EXCLAMATION_MARK) || is_type(st, TOK_TILDA) ||
+        is_type(st, TOK_ASTERISK) || is_type(st, TOK_AMPERSAND))
     {
         token op = st->current;
         advance_token(st);
@@ -301,7 +310,7 @@ static node parse_primary(parse_state *st)
     }
 
     // Identifiers and keywords
-    if (check(st, TOK_LABEL))
+    if (is_type(st, TOK_LABEL))
     {
         return *create_node_from_token(st, NODE_IDENTIFIER);
     }
@@ -334,7 +343,7 @@ static node parse_infix(parse_state *st, node left)
         add_child(call, name);
 
         // Parse arguments
-        if (!check(st, TOK_BRACKET_RIGHT))
+        if (!is_type(st, TOK_BRACKET_RIGHT))
         {
             do
             {
@@ -349,11 +358,7 @@ static node parse_infix(parse_state *st, node left)
             } while (match(st, TOK_COMMA));
         }
 
-        if (!match(st, TOK_BRACKET_RIGHT))
-        {
-            COMPILER_ERROR("Expected ')' to close function call");
-            return (node){};
-        }
+        PARSE_EXPECT(TOK_BRACKET_RIGHT, "Expected ')' to close function call");
 
         return *call;
     }
@@ -377,11 +382,7 @@ static node parse_infix(parse_state *st, node left)
         *index_node = index;
         add_child(subscript, index_node);
 
-        if (!match(st, TOK_SQUARE_BRACKET_RIGHT))
-        {
-            COMPILER_ERROR("Expected ']' to close subscript");
-            return (node){};
-        }
+        PARSE_EXPECT(TOK_SQUARE_BRACKET_RIGHT, "Expected ']' to close subscript")
 
         return *subscript;
     }
@@ -451,7 +452,7 @@ static node parse_expression(parse_state *st, precedence min_prec)
     while (!st->had_error && get_precedence(st->current.type) > min_prec)
     {
         // Prevent infinite loops: stop on EOF
-        if (check(st, TOK_EOF))
+        if (is_type(st, TOK_EOF))
             break;
 
         left = parse_infix(st, left);
@@ -469,15 +470,11 @@ static node parse_block(parse_state *st)
     if (st->had_error)
         return (node){};
 
-    if (!match(st, TOK_CURLY_BRACKET_LEFT))
-    {
-        COMPILER_ERROR("Expected '{' to start block");
-        return (node){};
-    }
+    PARSE_EXPECT(TOK_CURLY_BRACKET_LEFT, "Expected '{' to start block")
 
     node *block = new_node(NODE_PROGRAM);
 
-    while (!check(st, TOK_CURLY_BRACKET_RIGHT) && !check(st, TOK_EOF) && !st->had_error)
+    while (!is_type(st, TOK_CURLY_BRACKET_RIGHT) && !is_type(st, TOK_EOF) && !st->had_error)
     {
         node stmt = parse_statement(st);
         if (!st->had_error && stmt.type != (node_type)0)
@@ -488,11 +485,7 @@ static node parse_block(parse_state *st)
         }
     }
 
-    if (!match(st, TOK_CURLY_BRACKET_RIGHT))
-    {
-        COMPILER_ERROR("Expected '}' to close block");
-        return (node){};
-    }
+    PARSE_EXPECT(TOK_CURLY_BRACKET_RIGHT, "Expected '}' to close block");
 
     return *block;
 }
@@ -504,11 +497,7 @@ static node parse_if_statement(parse_state *st)
 
     advance_token(st); // consume 'if'
 
-    if (!match(st, TOK_BRACKET_LEFT))
-    {
-        COMPILER_ERROR("Expected '(' after 'if'");
-        return (node){};
-    }
+    PARSE_EXPECT(TOK_BRACKET_LEFT, "Expected '(' after 'if'");
 
     node *if_node = new_node(NODE_IF);
 
@@ -521,11 +510,7 @@ static node parse_if_statement(parse_state *st)
     *cond_node = cond;
     add_child(if_node, cond_node);
 
-    if (!match(st, TOK_BRACKET_RIGHT))
-    {
-        COMPILER_ERROR("Expected ')' after if condition");
-        return (node){};
-    }
+    PARSE_EXPECT(TOK_BRACKET_RIGHT, "Expected ')' after if condition");
 
     // Body
     node body = parse_block(st);
@@ -546,11 +531,7 @@ static node parse_while_statement(parse_state *st)
 
     advance_token(st); // consume 'while'
 
-    if (!match(st, TOK_BRACKET_LEFT))
-    {
-        COMPILER_ERROR("Expected '(' after 'while'");
-        return (node){};
-    }
+    PARSE_EXPECT(TOK_BRACKET_LEFT, "Expected '(' after 'while'");
 
     node *while_node = new_node(NODE_WHILE);
 
@@ -563,11 +544,7 @@ static node parse_while_statement(parse_state *st)
     *cond_node = cond;
     add_child(while_node, cond_node);
 
-    if (!match(st, TOK_BRACKET_RIGHT))
-    {
-        COMPILER_ERROR("Expected ')' after while condition");
-        return (node){};
-    }
+    PARSE_EXPECT(TOK_BRACKET_RIGHT, "Expected ')' after while condition");
 
     // Body
     node body = parse_block(st);
@@ -590,45 +567,21 @@ static node parse_function_declaration(parse_state *st)
 
     // Optional return type (identifier before name)
     // For now, we just parse the function name
-    if (!check(st, TOK_LABEL))
-    {
-        COMPILER_ERROR("Expected function name");
-        return (node){};
-    }
+    PARSE_EXPECT_DONT_EAT(TOK_LABEL, "Expected function name");
 
-    node *name = create_node_from_token(st, NODE_IDENTIFIER);
-    if (!name)
-        return (node){};
-    add_child(func, name);
+    add_child(func, create_node_from_token(st, NODE_IDENTIFIER));
 
     // Parameters
-    if (!match(st, TOK_BRACKET_LEFT))
-    {
-        COMPILER_ERROR("Expected '(' for function parameters");
-        return (node){};
-    }
+    PARSE_EXPECT(TOK_BRACKET_LEFT, "Expected '(' for function parameters");
 
-    if (!check(st, TOK_BRACKET_RIGHT))
-    {
-        do
-        {
-            if (!check(st, TOK_LABEL))
-            {
-                COMPILER_ERROR("Expected parameter name");
-                return (node){};
-            }
+    do {
+        PARSE_EXPECT_DONT_EAT(TOK_LABEL, "Expected parameter name");
 
-            node *param = create_node_from_token(st, NODE_IDENTIFIER);
-            add_child(func, param);
+        add_child(func, create_node_from_token(st, NODE_IDENTIFIER));
 
-        } while (match(st, TOK_COMMA));
-    }
+    }while(match(st, TOK_COMMA));
 
-    if (!match(st, TOK_BRACKET_RIGHT))
-    {
-        COMPILER_ERROR("Expected ')' after parameters");
-        return (node){};
-    }
+    PARSE_EXPECT(TOK_BRACKET_RIGHT, "Expected ')' after parameters");
 
     // Function body
     node body = parse_block(st);
@@ -648,7 +601,7 @@ static node parse_statement(parse_state *st)
         return (node){};
 
     // Control flow keywords
-    if (check(st, TOK_LABEL))
+    if (is_type(st, TOK_LABEL))
     {
         const char *text = st->current.text;
 
@@ -698,7 +651,7 @@ static node parse_statement(parse_state *st)
     }
 
     // Bare block
-    if (check(st, TOK_CURLY_BRACKET_LEFT))
+    if (is_type(st, TOK_CURLY_BRACKET_LEFT))
         return parse_block(st);
 
     COMPILER_ERROR("Unexpected token in statement: '%s'", st->current.text);
@@ -718,7 +671,7 @@ node parse_program(const char *input)
     node *program_node = new_node(NODE_PROGRAM);
 
     // Parse top-level declarations and statements
-    while (!check(&st, TOK_EOF) && !st.had_error)
+    while (!is_type(&st, TOK_EOF) && !st.had_error)
     {
         node decl = parse_statement(&st);
 
