@@ -4,9 +4,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../include/config.h"
 #include "../include/definitions.h"
-#include "../include/utils.h"
 #include "../include/objfile.h"
+#include "../include/utils.h"
 
 u8 string_to_side(const char *str)
 {
@@ -19,44 +20,41 @@ u8 string_to_side(const char *str)
     if (strcmp(str, "left") == 0)
         return left;
 
-    return 0xFF; // Invalid side
+    return 0xFF;
 }
 
-void prepare_slot(grid *g, const char *specification, void **out_data, u8 *out_size)
+static void attach_io_from_spec(grid *g, const io_spec *spec)
 {
-    if (!g || !specification || !out_data || !out_size)
-        return;
-    // specification format: {in|out}:{up|left|right|down}:slot:[value1,value2,value3]
-    char direction[4];
-    char side[5];
-    int slot;
-    char values[256];
-
-    if (sscanf(specification, "%3[^:]:%4[^:]:%d:%255[^]]", direction, side, &slot, values) != 4)
+    u8 side_num = (u8)string_to_side(spec->side);
+    if (side_num == 0xFF)
     {
-        fprintf(stderr, "Invalid IO specification: %s\n", specification);
+        fprintf(stderr, "Invalid side in IO spec: \"%s\"\n", spec->side);
         return;
     }
 
-    if (slot < 0)
-    {
-        fprintf(stderr, "Invalid slot number in IO specification: \"%d\"\n", slot);
-        return;
-    }
-
-    u8 *data = calloc(256, 1);
-    if (!data)
-    {
-        fprintf(stderr, "Allocation failed\n");
-        abort();
-    }
-
+    u8 *data = NULL;
     size_t data_size = 0;
 
-    if (values[0] != '=')
+    if (strcmp(spec->direction, "in") == 0)
     {
-        // Parse numeric values
-        char *token = strtok(values, ",");
+        data = attach_input(g, side_num, spec->slot);
+    }
+    else if (strcmp(spec->direction, "out") == 0)
+    {
+        data = attach_output(g, side_num, spec->slot);
+    }
+    else
+    {
+        fprintf(stderr, "Invalid direction in IO spec: \"%s\"\n", spec->direction);
+        exit(1);
+    }
+
+    if (spec->values[0] != '=')
+    {
+        char values_copy[256];
+        strncpy(values_copy, spec->values, sizeof(values_copy) - 1);
+
+        char *token = strtok(values_copy, ",");
         while (token)
         {
             data[data_size++] = (u8)atoi(token);
@@ -66,148 +64,181 @@ void prepare_slot(grid *g, const char *specification, void **out_data, u8 *out_s
     else
         data_size = 255;
 
-    u8 side_num = (u8)string_to_side(side);
-
-    if (side_num == 0xFF)
-    {
-        fprintf(stderr, "Invalid side in IO specification: \"%s\"\n", side);
-        free(data);
-        return;
-    }
-
-    if (strcmp(direction, "in") == 0)
-    {
-        attach_input(g, side_num, (u8)slot, data, (u8)data_size);
-    }
-    else if (strcmp(direction, "out") == 0)
-    {
-        attach_output(g, side_num, (u8)slot, data, (u8)data_size);
-    }
-    else
-    {
-        fprintf(stderr, "Invalid direction in IO specification: \"%s\"\n", direction);
-        free(data);
-        return;
-    }
-
-    *out_data = data;
-    *out_size = (u32)data_size;
+    slot_set_length(g, side_num, spec->slot, data_size);
 }
 
-#define MINIMAL_ARGS 7
-
-// Sample program: loads blocklang assembly from a file, assembles it, loads it into a grid for each block and runs it
-int main(int argc, char *argv[])
+static bool attach_io_for_block(grid *g, u8 x, u8 y, char block_key, vm_config *config)
 {
-    if (argc < MINIMAL_ARGS)
+    for (u8 i = 0; i < config->io_spec_count; i++)
     {
-        printf("Usage: %s <input file> <width> <height> <debug> <ticks_limit> <print_strings> "
-               "<{in|out}:{up|left|right|down}:slot:{[value1,value2,value3]|=}> ...\n",
-               argv[0]);
-        printf("example args: test.bl 2 2 true 128 true \"in:up:0:1,2,3\" \"out:up:=\"\n");
-        return 1;
+        io_spec *spec = &config->io_specs[i];
+        if (spec->block_key != 0 && spec->block_key != block_key)
+            continue;
+
+        attach_io_from_spec(g, spec);
+    }
+    return true;
+}
+
+static bool run_with_config(vm_config *config)
+{
+    grid *g = initialize_grid(config->layout_width, config->layout_height);
+    if (!g)
+    {
+        fprintf(stderr, "Failed to initialize grid\n");
+        return false;
     }
 
-    const char *input_file = argv[1];
-    int width = atoi(argv[2]);
-    int height = atoi(argv[3]);
-    bool debug = strcmp(argv[4], "true") == 0;
-    int ticks_limit = atoi(argv[5]);
-    bool print_strings = strcmp(argv[6], "true") == 0;
+    g->debug = config->debug;
 
-    char *source = read_to_heap(input_file);
-    if (!source)
+    for (u8 i = 0; i < config->program_count; i++)
     {
-        fprintf(stderr, "Failed to read source file: %s\n", input_file);
-        return 1;
-    }
+        char filepath[256];
+        snprintf(filepath, sizeof(filepath), "%s%s", config->program_dir, config->programs[i].filename);
 
-    void *bytecode = NULL;
-    u8 bytecode_len = 0;
-    u16 line_table[MAX_BYTECODE_SIZE] = {};
+        char *source = read_to_heap(filepath);
+        if (!source)
+        {
+            fprintf(stderr, "Failed to read source file: %s\n", filepath);
+            free_grid(g);
+            return false;
+        }
 
-    if (!assemble_program(source, &bytecode, &bytecode_len, line_table))
-    {
-        fprintf(stderr, "Assembly failed, all tokens:\n");
+        void *bytecode = NULL;
+        u8 bytecode_len = 0;
+        u16 line_table[MAX_BYTECODE_SIZE] = {};
 
-        debug_tokenize(source);
+        if (!assemble_program(source, &bytecode, &bytecode_len, line_table))
+        {
+            fprintf(stderr, "Assembly failed for %s\n", filepath);
+            free(source);
+            free_grid(g);
+            return false;
+        }
 
         free(source);
+        config->programs[i].bytecode = bytecode;
+        config->programs[i].bytecode_len = bytecode_len;
+    }
+
+    for (u8 y = 0; y < config->layout_height; y++)
+    {
+        for (u8 x = 0; x < config->layout_width; x++)
+        {
+            char block_char = config->layout[y][x];
+
+            for (u8 i = 0; i < config->program_count; i++)
+            {
+                if (config->programs[i].key == block_char)
+                {
+                    load_program(g, x, y, config->programs[i].bytecode, config->programs[i].bytecode_len);
+                    break;
+                }
+            }
+        }
+    }
+
+    for (u8 i = 0; i < config->io_spec_count; i++)
+    {
+        io_spec *spec = &config->io_specs[i];
+        if (spec->block_key == 0)
+        {
+            attach_io_from_spec(g, spec);
+        }
+    }
+
+    for (u8 y = 0; y < config->layout_height; y++)
+    {
+        for (u8 x = 0; x < config->layout_width; x++)
+        {
+            char block_char = config->layout[y][x];
+            for (u8 i = 0; i < config->io_spec_count; i++)
+            {
+                io_spec *spec = &config->io_specs[i];
+                if (spec->block_key != 0 && spec->block_key == block_char)
+                {
+                    attach_io_from_spec(g, spec);
+                }
+            }
+        }
+    }
+
+    run_grid(g, config->ticks_limit);
+
+    for (u8 i = 0; i < config->program_count; i++)
+    {
+        free(config->programs[i].bytecode);
+    }
+
+    for (u8 i = 0; i < config->io_spec_count; i++)
+    {
+        io_spec *spec = &config->io_specs[i];
+        if (spec->direction[0] != 'o')
+            continue;
+        
+        u8 side_num = string_to_side(spec->side);
+        u8 offset = io_slot_offset(g, side_num, spec->slot);
+        u8 *slot_ptr = g->slots[offset].bytes;
+        
+        printf("Output from %s side slot %d: ", spec->side, spec->slot);
+        
+        if (!config->print_strings)
+        {
+            for (u8 j = 0; j < g->slots[offset].len; j++)
+            {
+                if (slot_ptr[j] != 0)
+                    printf("%d ", slot_ptr[j]);
+            }
+        }
+        else
+        {
+            for (u8 j = 0; j < g->slots[offset].len; j++)
+            {
+                if (slot_ptr[j] != 0)
+                    printf("%c", slot_ptr[j]);
+            }
+        }
+        printf("\n");
+    }
+
+    free_grid(g);
+    return true;
+}
+
+int main(int argc, char *argv[])
+{
+    if (argc < 2)
+    {
+        printf("Usage:\n");
+        printf("  Config mode: %s <config.cfg>\n", argv[0]);
+        printf("\nConfig file format:\n");
+        printf("  # Comment\n");
+        printf("  program_dir: programs/\n");
+        printf("  A: adder.bl\n");
+        printf("  B: multiplier.bl\n");
+        printf("  layout:\n");
+        printf("  AB\n");
+        printf("  BA\n");
+        printf("  io_in:up:0:1,2,3\n");
+        printf("  io_out:down:0:=\n");
+        printf("  A:out:right:0:=\n");
+        printf("  debug:true\n");
+        printf("  ticks:128\n");
+        printf("  print_strings:true\n");
         return 1;
     }
 
-    free(source);
-
-    grid *g = initialize_grid(width, height);
-
-    g->debug = debug;
-
-    // Prepare IO slots based on command line arguments
-    void **data_ptrs = NULL;
-    u8 *sizes = NULL;
-    if (argc > MINIMAL_ARGS)
+    if (argc == 2)
     {
-        data_ptrs = malloc((argc - MINIMAL_ARGS) * sizeof(void *));
-        sizes = malloc((argc - MINIMAL_ARGS) * sizeof(u8));
-
-        if (!data_ptrs || !sizes)
+        vm_config config;
+        if (!parse_config(argv[1], &config))
         {
-            fprintf(stderr, "Memory allocation failed for IO data pointers\n");
-            free(bytecode);
-            free_grid(g);
-            if (data_ptrs)
-                free(data_ptrs);
-            if (sizes)
-                free(sizes);
+            fprintf(stderr, "Failed to parse config file\n");
             return 1;
         }
 
-        for (int i = MINIMAL_ARGS; i < argc; i++)
-        {
-            void *data = NULL;
-            u8 size = 0;
-            prepare_slot(g, argv[i], &data, &size);
-            // data is owned by the grid now
-            data_ptrs[i - MINIMAL_ARGS] = data;
-            sizes[i - MINIMAL_ARGS] = size;
-            // Note: In a real application, you might want to keep track of these pointers to free them later if needed
-        }
+        bool result = run_with_config(&config);
+        free_config(&config);
+        return result ? 0 : 1;
     }
-
-    for (u8 y = 0; y < g->height; y++)
-        for (u8 x = 0; x < g->width; x++)
-        {
-            load_program(g, x, y, bytecode, bytecode_len);
-        }
-
-    run_grid(g, ticks_limit);
-
-    free(bytecode);
-    free_grid(g);
-
-    if (data_ptrs)
-    {
-        for (int i = 0; i < (argc - MINIMAL_ARGS); i++)
-        {
-            // Print all the results
-            if (sizes[i] > 0)
-            {
-                printf("Results for buffer %d -> ", i);
-                u8 *data = (u8 *)data_ptrs[i];
-                if (!print_strings)
-                    for (u8 j = 0; j < sizes[i]; j++)
-                        printf("%d ", data[j]);
-                else
-                    for (u8 j = 0; j < sizes[i]; j++)
-                        printf("%c", data[j]);
-
-                printf("\n");
-            }
-            free(data_ptrs[i]);
-        }
-        free(data_ptrs);
-        free(sizes);
-    }
-
-    return 0;
 }

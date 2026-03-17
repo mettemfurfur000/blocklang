@@ -1,0 +1,7 @@
+    get UP
+    jof end
+    add 'a'
+    put DOWN
+    jmp NIL
+end:
+    halt

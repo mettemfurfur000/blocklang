@@ -105,11 +105,9 @@ typedef struct
 
     u8 waiting_ticks; // if not zero, will substract 1 and do nothing
 
-    u8 transfer_value;     // temporary place for transfered values
-    u8 transfer_side;      // 0-3 for valid sides, 4 for any side
-    bool waiting_transfer; // false if accepts values
-    bool waiting_for_io;   // will be set to true if transfer is needed
-    bool transfered;
+    u8 transfer_value;
+
+    bool io_blocked;    // set when an io operation is required, but the other block is valid but not ready
     bool state_halted;
 
     u8 last_caused_overflow; // for arithmetic overflows/underflows
@@ -117,7 +115,7 @@ typedef struct
 
 typedef struct
 {
-    u8 *ptr;
+    u8 bytes[256];
     u8 len;
     u8 cur;
     bool read_only; // if set to true, can be only readed from - no pushing
@@ -125,8 +123,8 @@ typedef struct
 
 typedef struct
 {
-    block *blocks;
-    io_slot *slots;
+    block blocks[256];
+    io_slot slots[256];
     u8 width, height, perimeter, total_blocks;
     bool any_ticked;
     bool debug;
@@ -137,8 +135,9 @@ grid *initialize_grid(u8 w, u8 h);
 
 u16 io_slot_offset(const grid *g, const u8 side, const u8 slot);
 
-void attach_input(grid *g, u8 side, u8 slot, const u8 *src, u8 len);
-void attach_output(grid *g, u8 side, u8 slot, u8 *dst, u8 len);
+void slot_set_length(grid*g, u8 side, u8 slot, u8 len);
+u8* attach_input(grid *g, u8 side, u8 slot);
+u8* attach_output(grid *g, u8 side, u8 slot);
 void load_program(grid *g, u8 x, u8 y, const void *bytecode, u8 length);
 
 void run_grid(grid *g, u32 max_ticks);

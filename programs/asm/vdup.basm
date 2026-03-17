@@ -1,0 +1,9 @@
+    get UP
+    jof end
+    put DOWN
+    put DOWN
+    get '|'
+    put DOWN
+    jmp NIL
+end:
+    halt

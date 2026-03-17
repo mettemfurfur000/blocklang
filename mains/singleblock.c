@@ -208,11 +208,14 @@ int main(int argc, char *argv[])
 
     grid *g = initialize_grid(1, 1);
 
-    u8 in_buffer[256] = {};
-    u8 out_buffer[256] = {};
+    u8 *in_buffer;
+    u8 *out_buffer;
 
-    attach_input(g, up, 0, in_buffer, 255);
-    attach_output(g, down, 0, out_buffer, 255);
+    in_buffer = attach_input(g, up, 0);
+    out_buffer = attach_output(g, down, 0);
+
+    slot_set_length(g, up, 0, 0);
+    slot_set_length(g, down, 0, 0xff);
 
     load_program(g, 0, 0, obj.bytecode, bytecode_len);
 
@@ -276,8 +279,12 @@ int main(int argc, char *argv[])
                 memset(out_buffer, 0, 256);
                 free_grid(g);
                 g = initialize_grid(1, 1);
-                attach_input(g, up, 0, in_buffer, 255);
-                attach_output(g, down, 0, out_buffer, 255);
+                in_buffer = attach_input(g, up, 0);
+                out_buffer = attach_output(g, down, 0);
+
+                slot_set_length(g, up, 0, 0);
+                slot_set_length(g, down, 0, 0xff);
+
                 load_program(g, 0, 0, obj.bytecode, bytecode_len);
                 display_debug_ui(g, &obj, out_buffer);
                 break;
@@ -326,6 +333,7 @@ int main(int argc, char *argv[])
                 size_t len = strlen((char *)in_buffer);
                 if (len > 0 && in_buffer[len - 1] == '\n')
                     in_buffer[len - 1] = '\0';
+                slot_set_length(g, up, 0, len);
                 display_debug_ui(g, &obj, out_buffer);
                 break;
             }

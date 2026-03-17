@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-block *grid_step_block(const grid *g, const u8 x, const u8 y, const u8 side)
+block *grid_step_block(grid *g, const u8 x, const u8 y, const u8 side)
 {
     u8 offset_x = x;
     u8 offset_y = y;
@@ -19,7 +19,7 @@ block *grid_step_block(const grid *g, const u8 x, const u8 y, const u8 side)
     return &g->blocks[offset_y * g->width + offset_x];
 }
 
-io_slot *grid_step_edge(const grid *g, const u8 x, const u8 y, const u8 side)
+io_slot *grid_step_edge(grid *g, const u8 x, const u8 y, const u8 side)
 {
     if ((side == up && y == 0) ||               //
         (side == down && y == g->height - 1) || //
@@ -32,24 +32,24 @@ io_slot *grid_step_edge(const grid *g, const u8 x, const u8 y, const u8 side)
 
 bool can_read(const io_slot *slot)
 {
-    return slot->ptr && slot->read_only && slot->cur < slot->len;
+    return slot->read_only && slot->cur < slot->len;
 }
 
 bool can_write(const io_slot *slot)
 {
-    return slot->ptr && !slot->read_only && slot->cur < slot->len;
+    return !slot->read_only && slot->cur < slot->len;
 }
 
 u8 read_byte(io_slot *slot)
 {
     assert(slot->cur < slot->len);
-    return slot->ptr[slot->cur++];
+    return slot->bytes[slot->cur++];
 }
 
 void write_byte(io_slot *slot, const u8 val)
 {
     assert(slot->cur < slot->len);
-    slot->ptr[slot->cur++] = val;
+    slot->bytes[slot->cur++] = val;
 }
 
 u8 block_get_transfer_side(const instruction i)
@@ -137,27 +137,35 @@ side get_opposite_side(side val)
     }
 }
 
+target_t to_target(side val)
+{
+    switch (val)
+    {
+    case up:
+        return UP;
+    case right:
+        return RIGHT;
+    case down:
+        return DOWN;
+    case left:
+        return LEFT;
+    case any:
+        return ANY;
+    case invalid:
+        assert(0 && "invalid side");
+    }
+    return 0;
+}
+
 bool is_target_used(instruction i)
 {
     switch (i.operation)
     {
     case NOP:
-    case JOF:
     case HALT:
         return false;
     }
     return true;
-}
-
-bool is_writing_operation(u8 op)
-{
-    switch (op)
-    {
-    case PUT:
-    case POP:
-        return true;
-    }
-    return false;
 }
 
 bool is_writing(instruction i)
@@ -244,9 +252,9 @@ void block_write_to_target(grid *g, block *b, instruction i, u8 value, u8 *advan
     }
 }
 
-static bool try_direct_block_transfer(grid *g, block *src, u8 src_x, u8 src_y, side src_side, u8 value)
+static bool block_write_to_block_direct(grid *g, block *src, u8 x, u8 y, side side, u8 value)
 {
-    block *dst = grid_step_block(g, src_x, src_y, src_side);
+    block *dst = grid_step_block(g, x, y, side);
     if (!dst)
         return false;
 
@@ -261,16 +269,23 @@ static bool try_direct_block_transfer(grid *g, block *src, u8 src_x, u8 src_y, s
 
     instruction dst_i = dst->bytecode[dst->current_instruction];
 
-    side needed_side = get_opposite_side(src_side);
+    target_t needed_side = to_target(get_opposite_side(side));
     if (dst_i.target != needed_side)
+    {
+        src->io_blocked = true;
         return false;
+    }
 
-    if (is_writing_operation(dst_i.operation))
+    if (is_writing(dst_i))
+    {
+        src->io_blocked = true;
         return false;
+    }
+
+    src->io_blocked = false;
+    dst->io_blocked = false;
 
     dst->transfer_value = value;
-    dst->transfered = true;
-    dst->waiting_for_io = false;
     return true;
 }
 
@@ -290,10 +305,10 @@ void block_write_to_side(grid *g, block *b, u8 x, u8 y, side side, u8 value)
         return;
     }
 
-    if (try_direct_block_transfer(g, b, x, y, side, value))
+    if (block_write_to_block_direct(g, b, x, y, side, value))
         return;
 
-    if (!slot)
+    if (!slot && !b->io_blocked)
         b->last_caused_overflow = true;
 }
 
@@ -398,7 +413,10 @@ void block_execute_operation(block *b, u8 operation, u8 operand_value, u8 *advan
         break;
     case JOF:
         if (b->last_caused_overflow)
+        {
             *advance_to = operand_value;
+            b->last_caused_overflow = false;
+        }
         break;
     default:
         break;
@@ -408,26 +426,39 @@ void block_execute_operation(block *b, u8 operation, u8 operand_value, u8 *advan
 bool block_try_read_from_neighbor(grid *g, block *b, u8 x, u8 y, side s, u8 *out_value)
 {
     block *src = grid_step_block(g, x, y, s);
+    if(src && src->state_halted)
+    {
+        b->io_blocked = false;
+        b->last_caused_overflow = true;
+    }
+
     if (!src || !src->bytecode || src->state_halted || src->waiting_ticks || src->current_instruction >= src->length)
         return false;
 
     instruction src_i = src->bytecode[src->current_instruction];
-    side needed_side = get_opposite_side(s);
+    target_t needed_side = to_target(get_opposite_side(s));
 
-    if (src_i.target != needed_side || !is_writing_operation(src_i.operation))
+    if (src_i.target != needed_side || !is_writing(src_i))
+    {
+        b->io_blocked = true;
         return false;
+    }
 
+    b->io_blocked = false;
+    src->io_blocked = false;
     *out_value = block_get_instruction_write_operand(src, src_i);
-    src->transfered = true;
-    src->waiting_for_io = false;
     return true;
 }
 
-bool block_try_read_from_slot(grid *g, u8 x, u8 y, side s, u8 *out_value)
+bool block_try_read_from_slot(grid *g, block *b, u8 x, u8 y, side s, u8 *out_value)
 {
     io_slot *slot = grid_step_edge(g, x, y, s);
     if (!slot || !can_read(slot))
+    {
+        if (!b->io_blocked)
+            b->last_caused_overflow = true;
         return false;
+    }
 
     *out_value = read_byte(slot);
     return true;
@@ -444,7 +475,7 @@ bool block_read_from_io(grid *g, block *b, u8 x, u8 y, side read_side, u8 *out_v
         }
         for (side s = up; s <= left; s++)
         {
-            if (block_try_read_from_slot(g, x, y, s, out_value))
+            if (block_try_read_from_slot(g, b, x, y, s, out_value))
                 return true;
         }
     }
@@ -452,7 +483,7 @@ bool block_read_from_io(grid *g, block *b, u8 x, u8 y, side read_side, u8 *out_v
     {
         if (block_try_read_from_neighbor(g, b, x, y, read_side, out_value))
             return true;
-        if (block_try_read_from_slot(g, x, y, read_side, out_value))
+        if (block_try_read_from_slot(g, b, x, y, read_side, out_value))
             return true;
     }
     return false;
@@ -475,6 +506,9 @@ void block_exec_instruction_mono(grid *g, block *b, u8 x, u8 y)
         b->current_instruction = 0;
 
     const instruction i = b->bytecode[b->current_instruction];
+
+    // printf("%d:%d : %d\t%s\t%s\t%s\t%s\n", x, y, b->current_instruction, op_code_str(i.operation), target_str(i.target),
+    //        b->io_blocked ? "BK" : "", b->last_caused_overflow ? "OF" : "");
 
     if (i.operation == HALT)
     {
@@ -502,12 +536,7 @@ void block_exec_instruction_mono(grid *g, block *b, u8 x, u8 y)
     {
         if (io_needed)
         {
-            if (!block_read_from_io(g, b, x, y, transfer_side, &operand_value))
-            {
-                b->last_caused_overflow = true;
-                operand_value = 0;
-            }
-            else
+            if (block_read_from_io(g, b, x, y, transfer_side, &operand_value))
             {
                 b->transfer_value = operand_value;
             }
@@ -520,7 +549,8 @@ void block_exec_instruction_mono(grid *g, block *b, u8 x, u8 y)
         block_execute_operation(b, i.operation, operand_value, &advance_to);
     }
 
-    b->current_instruction = advance_to >= b->length ? b->length - 1 : advance_to;
+    if (!b->io_blocked) // advance if not blocked from doing so
+        b->current_instruction = advance_to >= b->length ? b->length - 1 : advance_to;
 }
 
 void run_grid(grid *g, u32 max_ticks)

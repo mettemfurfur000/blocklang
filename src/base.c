@@ -16,24 +16,19 @@ grid *initialize_grid(u8 w, u8 h)
     u16 total_blocks = w * h;
     u16 edge_length = (w + h) * 2;
 
+    assert(total_blocks <= 256);
+    assert(edge_length <= 256);
+
     g->width = w;
     g->height = h;
     g->total_blocks = total_blocks;
     g->perimeter = edge_length;
-
-    g->blocks = calloc(total_blocks, sizeof(block));
-    g->slots = calloc(edge_length, sizeof(io_slot));
-
-    assert(g->blocks != NULL);
-    assert(g->slots != NULL);
 
     return g;
 }
 
 void free_grid(grid *g)
 {
-    free(g->blocks);
-    free(g->slots);
     free(g);
 }
 
@@ -62,28 +57,37 @@ u16 io_slot_offset(const grid *g, const u8 side, const u8 slot)
     return offset;
 }
 
-void attach_input(grid *g, u8 side, u8 slot, const u8 *src, u8 len)
+void slot_set_length(grid*g, u8 side, u8 slot, u8 len)
 {
     u16 offset = io_slot_offset(g, side, slot);
 
     io_slot *s = &g->slots[offset];
 
     s->len = len;
-    s->ptr = (void *)src;
-    s->read_only = true;
-    s->cur = 0;
 }
 
-void attach_output(grid *g, u8 side, u8 slot, u8 *dst, u8 len)
+u8* attach_input(grid *g, u8 side, u8 slot)
 {
     u16 offset = io_slot_offset(g, side, slot);
 
     io_slot *s = &g->slots[offset];
 
-    s->len = len;
-    s->ptr = (void *)dst;
+    s->read_only = true;
+    s->cur = 0;
+
+    return s->bytes;
+}
+
+u8* attach_output(grid *g, u8 side, u8 slot)
+{
+    u16 offset = io_slot_offset(g, side, slot);
+
+    io_slot *s = &g->slots[offset];
+
     s->read_only = false;
     s->cur = 0;
+
+    return s->bytes;
 }
 
 void load_program(grid *g, u8 x, u8 y, const void *bytecode, u8 length)
@@ -95,6 +99,5 @@ void load_program(grid *g, u8 x, u8 y, const void *bytecode, u8 length)
     b->bytecode = (void *)bytecode;
     b->length = length;
     b->stack_top = -1;
-    b->transfer_side = invalid;
     b->current_instruction = 0;
 }

@@ -1,0 +1,28 @@
+{
+    "program_dir": "programs/",
+    "debug": true,
+    "ticks": 128,
+    "print_strings": true,
+    "programs": {
+        "A": "asm/reader.basm",
+        "B": "asm/vdup.basm"
+    },
+    "layout": [
+        "A",
+        "B"
+    ],
+    "io": [
+        {
+            "direction": "in",
+            "side": "up",
+            "slot": 0,
+            "values": "1,2,3"
+        },
+        {
+            "direction": "out",
+            "side": "down",
+            "slot": 0,
+            "values": "="
+        }
+    ]
+}
