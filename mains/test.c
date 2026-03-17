@@ -67,19 +67,6 @@ static void attach_io_from_spec(grid *g, const io_spec *spec)
     slot_set_length(g, side_num, spec->slot, data_size);
 }
 
-static bool attach_io_for_block(grid *g, u8 x, u8 y, char block_key, vm_config *config)
-{
-    for (u8 i = 0; i < config->io_spec_count; i++)
-    {
-        io_spec *spec = &config->io_specs[i];
-        if (spec->block_key != 0 && spec->block_key != block_key)
-            continue;
-
-        attach_io_from_spec(g, spec);
-    }
-    return true;
-}
-
 static bool run_with_config(vm_config *config)
 {
     grid *g = initialize_grid(config->layout_width, config->layout_height);
@@ -164,6 +151,11 @@ static bool run_with_config(vm_config *config)
     }
 
     run_grid(g, config->ticks_limit);
+
+    if(g->ticks >= config->ticks_limit)
+    {
+        printf("Ran out of ticks\n");
+    }
 
     for (u8 i = 0; i < config->program_count; i++)
     {
