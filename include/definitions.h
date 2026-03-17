@@ -30,7 +30,7 @@ typedef enum
     all values in block assemply are unsigned bytes - u8
 */
 
-// possible targets of an operation:
+// possible target_t of an operation:
 typedef enum
 {
     STK, // current stack up value, if nothing was pushed to it, equals to zero
@@ -52,13 +52,13 @@ typedef enum
     // when used with writing instructions PUT and POP, ACC value will be used as an address, and RG3 will be written to
     // said address in bytecode
     TARGET_GUARD_LAST
-} targets;
+} target_t;
 
 static_assert(TARGET_GUARD_LAST <= 16, "");
 
 // only 1 target is supported at the moment
 
-// operations that can be done with these targets:
+// operations that can be done with these target_t:
 typedef enum
 {
     NOP,  // does nothing, but spends a tick

@@ -10,7 +10,7 @@
 static const char *valid_opcodes[] = {"nop", "wait", "add", "sub", "mlt", "div", "mod", "get",
                                       "put", "push", "pop", "jmp", "jez", "jnz", "jof", "halt"};
 
-static const char *valid_targets[] = {"STK", "ACC", "RG0", "RG1", "RG2", "RG3", "ADJ", "UP",
+static const char *valid_target_t[] = {"STK", "ACC", "RG0", "RG1", "RG2", "RG3", "ADJ", "UP",
                                       "RIGHT", "DOWN", "LEFT", "ANY", "NIL", "SLN", "CUR", "REF"};
 
 int string_to_opcode(const char *str)
@@ -25,9 +25,9 @@ int string_to_opcode(const char *str)
 
 int string_to_target(const char *str)
 {
-    for (size_t i = 0; i < sizeof(valid_targets) / sizeof(valid_targets[0]); i++)
+    for (size_t i = 0; i < sizeof(valid_target_t) / sizeof(valid_target_t[0]); i++)
     {
-        if (strcmp(str, valid_targets[i]) == 0)
+        if (strcmp(str, valid_target_t[i]) == 0)
             return (u8)i & 0x0F;
     }
     return -1;
@@ -45,9 +45,9 @@ bool is_valid_opcode(const char *str)
 
 bool is_valid_target(const char *str)
 {
-    for (size_t i = 0; i < sizeof(valid_targets) / sizeof(valid_targets[0]); i++)
+    for (size_t i = 0; i < sizeof(valid_target_t) / sizeof(valid_target_t[0]); i++)
     {
-        if (strcmp(str, valid_targets[i]) == 0)
+        if (strcmp(str, valid_target_t[i]) == 0)
             return true;
     }
     return false;
@@ -233,7 +233,7 @@ token next_token(const char **src, int *lines_ret)
         else
         {
             // For .hb high-level language files, treat everything as identifiers/labels
-            // Don't check for opcodes or targets - those are only in .bl block language
+            // Don't check for opcodes or target_t - those are only in .bl block language
             tok.type = TOK_LABEL; // all identifiers are labels in high-level language
         }
 

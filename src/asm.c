@@ -269,7 +269,7 @@ bool assemble_program(const char *source, void **dest, u8 *out_len, u16 *line_ta
             token next = new_token_asm(&s, &cur_line); // Get the next token
 
             if (opcode == JMP || opcode == JEZ || opcode == JNZ ||
-                opcode == JOF) // jumps can accept labels, numbers, targets
+                opcode == JOF) // jumps can accept labels, numbers, target_t
             {
                 if (next.type == TOK_LABEL)
                 {
