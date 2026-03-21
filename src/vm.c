@@ -73,7 +73,7 @@ const char *op_code_str(u8 opcode)
 {
     switch (opcode)
     {
-        CASE(NOP)
+        CASE(EXT)
         CASE(WAIT)
         CASE(ADD)
         CASE(SUB)
@@ -161,7 +161,6 @@ bool is_target_used(instruction i)
 {
     switch (i.operation)
     {
-    case NOP:
     case HALT:
         return false;
     }
@@ -270,17 +269,19 @@ static bool block_write_to_block_direct(grid *g, block *src, u8 x, u8 y, side si
     instruction dst_i = dst->bytecode[dst->current_instruction];
 
     target_t needed_side = to_target(get_opposite_side(side));
-    if (dst_i.target != needed_side)
+    if (dst_i.target != needed_side) // block io until dest block has the side opposite to ours in its target bits
     {
         src->io_blocked = true;
         return false;
     }
 
-    if (is_writing(dst_i))
+    if (is_writing(dst_i)) // if its writing to us, stay blocked. Causes deadlocks!
     {
         src->io_blocked = true;
         return false;
     }
+
+    // is reading from us, fine. Give the value
 
     src->io_blocked = false;
     dst->io_blocked = false;
@@ -325,9 +326,9 @@ u8 block_get_instruction_write_operand(block *b, instruction i)
     return 0;
 }
 
-u8 block_get_operand_from_local_target(block *b, u8 target, u8 *advance_to)
+u8 block_get_operand_value(block *b, instruction i, u8 *advance_to)
 {
-    switch (target)
+    switch (i.target)
     {
     case STK:
         if (b->stack_top < 0)
@@ -339,10 +340,11 @@ u8 block_get_operand_from_local_target(block *b, u8 target, u8 *advance_to)
     case RG1:
     case RG2:
     case RG3:
-        return b->registers[target - RG0];
+        return b->registers[i.target - RG0];
     case ADJ:
         (*advance_to)++;
-        return ((u8 *)(b->bytecode))[b->current_instruction + 1];
+        // since EXT reads from the next byte, ADJ is actualy next after ext opcode
+        return ((u8 *)(b->bytecode))[b->current_instruction + (i.operation == EXT ? 2 : 1)];
     case REF:;
         const u8 addr = b->accumulator;
         const bool toofar = addr > b->length;
@@ -423,10 +425,50 @@ void block_execute_operation(block *b, u8 operation, u8 operand_value, u8 *advan
     }
 }
 
+void block_exec_extended_op(block *b, u8 ext_opcode, u8 target_value, u8 *advance_to)
+{
+    u8 acc_value = b->accumulator;
+    u8 shift;
+
+    switch (ext_opcode)
+    {
+    case EXT_XOR:
+        b->accumulator = acc_value ^ target_value;
+        break;
+    case EXT_AND:
+        b->accumulator = acc_value & target_value;
+        break;
+    case EXT_OR:
+        b->accumulator = acc_value | target_value;
+        break;
+    case EXT_NOT:
+        b->accumulator = ~target_value;
+        break;
+    case EXT_SHL:
+        shift = acc_value & 0x07;
+        b->accumulator = target_value << shift;
+        break;
+    case EXT_SHR:
+        shift = acc_value & 0x07;
+        b->accumulator = target_value >> shift;
+        break;
+    case EXT_ROL:
+        shift = acc_value & 0x07;
+        b->accumulator = (target_value << shift) | (target_value >> (8 - shift));
+        break;
+    case EXT_ROR:
+        shift = acc_value & 0x07;
+        b->accumulator = (target_value >> shift) | (target_value << (8 - shift));
+        break;
+    default:
+        break;
+    }
+}
+
 bool block_try_read_from_neighbor(grid *g, block *b, u8 x, u8 y, side s, u8 *out_value)
 {
     block *src = grid_step_block(g, x, y, s);
-    if(src && src->state_halted)
+    if (src && src->state_halted)
     {
         b->io_blocked = false;
         b->last_caused_overflow = true;
@@ -507,7 +549,8 @@ void block_exec_instruction_mono(grid *g, block *b, u8 x, u8 y)
 
     const instruction i = b->bytecode[b->current_instruction];
 
-    // printf("%d:%d : %d\t%s\t%s\t%s\t%s\n", x, y, b->current_instruction, op_code_str(i.operation), target_str(i.target),
+    // printf("%d:%d : %d\t%s\t%s\t%s\t%s\n", x, y, b->current_instruction, op_code_str(i.operation),
+    // target_str(i.target),
     //        b->io_blocked ? "BK" : "", b->last_caused_overflow ? "OF" : "");
 
     if (i.operation == HALT)
@@ -543,10 +586,19 @@ void block_exec_instruction_mono(grid *g, block *b, u8 x, u8 y)
         }
         else if (target_needed)
         {
-            operand_value = block_get_operand_from_local_target(b, i.target, &advance_to);
+            operand_value = block_get_operand_value(b, i, &advance_to);
         }
 
-        block_execute_operation(b, i.operation, operand_value, &advance_to);
+        if (i.operation == EXT) // special case for the extended ops, since none of them "write" at the moment, its in
+                                // the "read" branch
+        {
+            u8 ext_opcode = ((u8 *)b->bytecode)[b->current_instruction + 1];
+            advance_to++; // jump over ext opcode byte
+
+            block_exec_extended_op(b, ext_opcode, operand_value, &advance_to); // exec
+        }
+        else
+            block_execute_operation(b, i.operation, operand_value, &advance_to); // exec normally
     }
 
     if (!b->io_blocked) // advance if not blocked from doing so

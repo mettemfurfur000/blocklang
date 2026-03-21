@@ -7,8 +7,10 @@
 #include "../include/definitions.h"
 #include "../include/tokenizer.h"
 
-static const char *valid_opcodes[] = {"nop", "wait", "add", "sub", "mlt", "div", "mod", "get",
+static const char *valid_opcodes[] = {"ext", "wait", "add", "sub", "mlt", "div", "mod", "get",
                                       "put", "push", "pop", "jmp", "jez", "jnz", "jof", "halt"};
+
+static const char *valid_ext_opcodes[] = {"xor", "and", "or", "not", "shl", "shr", "rol", "ror"};
 
 static const char *valid_target_t[] = {"STK", "ACC", "RG0", "RG1", "RG2", "RG3", "ADJ", "UP",
                                       "RIGHT", "DOWN", "LEFT", "ANY", "NIL", "SLN", "CUR", "REF"};
@@ -19,6 +21,16 @@ int string_to_opcode(const char *str)
     {
         if (strcmp(str, valid_opcodes[i]) == 0)
             return (u8)i & 0x0F;
+    }
+    return -1;
+}
+
+int string_to_ext_opcode(const char *str)
+{
+    for (size_t i = 0; i < sizeof(valid_ext_opcodes) / sizeof(valid_ext_opcodes[0]); i++)
+    {
+        if (strcmp(str, valid_ext_opcodes[i]) == 0)
+            return (u8)i & 0xFF;
     }
     return -1;
 }
@@ -43,6 +55,16 @@ bool is_valid_opcode(const char *str)
     return false;
 }
 
+bool is_valid_ext_opcode(const char *str)
+{
+    for (size_t i = 0; i < sizeof(valid_ext_opcodes) / sizeof(valid_ext_opcodes[0]); i++)
+    {
+        if (strcmp(str, valid_ext_opcodes[i]) == 0)
+            return true;
+    }
+    return false;
+}
+
 bool is_valid_target(const char *str)
 {
     for (size_t i = 0; i < sizeof(valid_target_t) / sizeof(valid_target_t[0]); i++)
@@ -60,6 +82,7 @@ const char *tok_to_str(token_type t)
         CASE(TOK_EOF)
         CASE(TOK_LABEL)
         CASE(TOK_OPCODE)
+        CASE(TOK_EXT_OPCODE)
         CASE(TOK_TARGET)
         CASE(TOK_NUMBER)
         CASE(TOK_COMMA)
