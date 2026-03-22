@@ -6,6 +6,7 @@ typedef enum
     TOK_EOF,
     TOK_LABEL,
     TOK_OPCODE,
+    TOK_EXT_OPCODE,
     TOK_TARGET,
     TOK_NUMBER,
     TOK_COMMA,
@@ -65,10 +66,12 @@ typedef struct
 
 const char *tok_to_str(token_type t);
 bool is_valid_opcode(const char *str);
+bool is_valid_ext_opcode(const char *str);
 bool is_valid_target(const char *str);
 
 token next_token(const char **src, int *lines_ret);
 int string_to_opcode(const char *str);
+int string_to_ext_opcode(const char *str);
 int string_to_target(const char *str);
 
 #endif

@@ -179,7 +179,7 @@ static bool run_with_config(vm_config *config)
             for (u8 j = 0; j < g->slots[offset].len; j++)
             {
                 if (slot_ptr[j] != 0)
-                    printf("%d ", slot_ptr[j]);
+                    printf("0x%02X ", slot_ptr[j]);
             }
         }
         else

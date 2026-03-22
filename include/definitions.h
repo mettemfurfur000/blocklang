@@ -61,7 +61,7 @@ static_assert(TARGET_GUARD_LAST <= 16, "");
 // operations that can be done with these target_t:
 typedef enum
 {
-    NOP,  // does nothing, but spends a tick
+    EXT,  // extended opcode - next bytecode byte contains extended op, target is target
     WAIT, // from target - wait for ticks
     ADD,  // from target - add to ACC
     SUB,  // from target - sub from ACC
@@ -81,6 +81,21 @@ typedef enum
 } operations;
 
 static_assert(OP_GUARD_LAST <= 16, "");
+
+// extended operations - accessed via EXT opcode with extended opcode in next byte
+// extended ops read from target, read from ACC, write result to ACC
+typedef enum
+{
+    EXT_XOR = 0, // ACC = ACC ^ target
+    EXT_AND,     // ACC = ACC & target
+    EXT_OR,      // ACC = ACC | target
+    EXT_NOT,     // ACC = ~target (ACC ignored)
+    EXT_SHL,     // ACC = target << ACC (ACC = shift count)
+    EXT_SHR,     // ACC = target >> ACC (logical shift)
+    EXT_ROL,     // ACC = rotate target left by ACC bits
+    EXT_ROR,     // ACC = rotate target right by ACC bits
+    EXT_GUARD_LAST
+} ext_opcodes;
 
 typedef struct
 {

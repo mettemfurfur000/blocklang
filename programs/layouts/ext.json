@@ -1,0 +1,26 @@
+{
+    "program_dir": "programs/",
+    "debug": true,
+    "ticks": 128,
+    "print_strings": false,
+    "programs": {
+        "A": "asm/test_ext.asm"
+    },
+    "layout": [
+        "A"
+    ],
+    "io": [
+        {
+            "direction": "in",
+            "side": "up",
+            "slot": 0,
+            "values": "="
+        },
+        {
+            "direction": "out",
+            "side": "down",
+            "slot": 0,
+            "values": "="
+        }
+    ]
+}

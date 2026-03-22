@@ -39,6 +39,8 @@ void fix_opcode(token *t)
 {
     if (is_valid_opcode(t->text))
         t->type = TOK_OPCODE;
+    else if (is_valid_ext_opcode(t->text))
+        t->type = TOK_EXT_OPCODE;
 }
 
 void fix_target(token *t)
@@ -62,7 +64,8 @@ void bytecode_write(u8 *bytecode, u8 value, u16 *line_table, u8 *instruction_ind
 
     (*instruction_index)++;
     // debug output
-    // printf("Line %d [%d] = %02x / %c\n", cur_line, *instruction_index - 1, value, value >= 32 && value <= 126 ? value : '.');
+    // printf("Line %d [%d] = %02x / %c\n", cur_line, *instruction_index - 1, value, value >= 32 && value <= 126 ? value
+    // : '.');
 }
 
 bool assemble_program(const char *source, void **dest, u8 *out_len, u16 *line_table)
@@ -111,11 +114,13 @@ bool assemble_program(const char *source, void **dest, u8 *out_len, u16 *line_ta
                 total_labels++;
             }
         }
-        else if (tok.type == TOK_OPCODE)
+        else if (tok.type == TOK_OPCODE || tok.type == TOK_EXT_OPCODE)
         {
             program_length++;
+            if (tok.type == TOK_EXT_OPCODE)
+                program_length++;
 
-            if (strcmp(tok.text, "halt") == 0 || strcmp(tok.text, "nop") == 0)
+            if (strcmp(tok.text, "halt") == 0)
             {
                 // No operand here
                 continue;
@@ -157,6 +162,20 @@ bool assemble_program(const char *source, void **dest, u8 *out_len, u16 *line_ta
                 return false;
             }
         }
+        // else if (tok.type == TOK_EXT_OPCODE)
+        // {
+        //     program_length++; // byte for the base opcode && target
+        //     program_length++; // EXT opcode takes an extra byte to encode the instruction
+
+        //     token next = new_token_asm(&s, &cur_line);
+
+        //     if (next.type != TOK_TARGET)
+        //     {
+        //         fprintf(stderr, "Line %d: Expected a target after extended opcode \"%s\", got \"%s\"\n", cur_line,
+        //                 tok.text, next.text);
+        //         return false;
+        //     }
+        // }
         else if (tok.type == TOK_COMMENT)
         {
             // Ignore comments
@@ -255,12 +274,13 @@ bool assemble_program(const char *source, void **dest, u8 *out_len, u16 *line_ta
                 return false;
             }
         }
-        else if (tok.type == TOK_OPCODE)
+        else if (tok.type == TOK_OPCODE || tok.type == TOK_EXT_OPCODE)
         {
             // Generate bytecode for opcode
             int opcode = string_to_opcode(tok.text);
+            int ext_opcode = string_to_ext_opcode(tok.text);
 
-            if (opcode == HALT || opcode == NOP)
+            if (ext_opcode == -1 && opcode == HALT)
             {
                 bytecode_write(bytecode, INSTRUCTION(opcode, NIL), line_table, &bc_index, cur_line);
                 continue;
@@ -268,8 +288,8 @@ bool assemble_program(const char *source, void **dest, u8 *out_len, u16 *line_ta
 
             token next = new_token_asm(&s, &cur_line); // Get the next token
 
-            if (opcode == JMP || opcode == JEZ || opcode == JNZ ||
-                opcode == JOF) // jumps can accept labels, numbers, target_t
+            if (ext_opcode == -1 && (opcode == JMP || opcode == JEZ || opcode == JNZ ||
+                                     opcode == JOF)) // jumps can accept labels, numbers, target_t
             {
                 if (next.type == TOK_LABEL)
                 {
@@ -313,16 +333,35 @@ bool assemble_program(const char *source, void **dest, u8 *out_len, u16 *line_ta
                 continue;
             }
 
+            // if (opcode == EXT)
+            // {
+            //     // int ext_opcode = string_to_ext_opcode(tok.text);
+            //     bytecode_write(bytecode, (u8)ext_opcode, line_table, &bc_index, cur_line);
+            // }
+
             // the rest of the instructions can take a target/number/label/char literal here
 
             if (next.type == TOK_CHAR_LITERAL)
             {
-                bytecode_write(bytecode, INSTRUCTION(opcode, ADJ), line_table, &bc_index, cur_line);
+                if (ext_opcode != -1)
+                {
+                    bytecode_write(bytecode, INSTRUCTION(EXT, ADJ), line_table, &bc_index, cur_line);
+                    bytecode_write(bytecode, (u8)ext_opcode, line_table, &bc_index, cur_line);
+                }
+                else
+                    bytecode_write(bytecode, INSTRUCTION(opcode, ADJ), line_table, &bc_index, cur_line);
+
                 bytecode_write(bytecode, next.text[0], line_table, &bc_index, cur_line);
             }
             else if (next.type == TOK_LABEL)
             {
-                bytecode_write(bytecode, INSTRUCTION(opcode, ADJ), line_table, &bc_index, cur_line);
+                if (ext_opcode != -1)
+                {
+                    bytecode_write(bytecode, INSTRUCTION(EXT, ADJ), line_table, &bc_index, cur_line);
+                    bytecode_write(bytecode, (u8)ext_opcode, line_table, &bc_index, cur_line);
+                }
+                else
+                    bytecode_write(bytecode, INSTRUCTION(opcode, ADJ), line_table, &bc_index, cur_line);
 
                 // Lookup label address
                 int label_address = get_label_address(labels, total_labels, next.text);
@@ -338,11 +377,18 @@ bool assemble_program(const char *source, void **dest, u8 *out_len, u16 *line_ta
             }
             else if (next.type == TOK_NUMBER)
             {
-                bytecode_write(bytecode, INSTRUCTION(opcode, ADJ), line_table, &bc_index,
-                               cur_line); // encode value as adjacent byte
+                if (ext_opcode != -1)
+                {
+                    bytecode_write(bytecode, INSTRUCTION(EXT, ADJ), line_table, &bc_index, cur_line);
+                    bytecode_write(bytecode, (u8)ext_opcode, line_table, &bc_index, cur_line);
+                }
+                else
+                    bytecode_write(bytecode, INSTRUCTION(opcode, ADJ), line_table, &bc_index, cur_line);
+
                 if (next.value > 0xff)
                     fprintf(stderr, "Line %d: Warning - number will not fit in a byte in front of an ADJ: %d\n",
                             cur_line, next.value);
+
                 bytecode_write(bytecode, next.value & 0xff, line_table, &bc_index, cur_line);
             }
             else if (next.type == TOK_TARGET)
@@ -354,7 +400,14 @@ bool assemble_program(const char *source, void **dest, u8 *out_len, u16 *line_ta
                     assert(false && "Unreachable - target validity already checked");
                 }
 
-                bytecode_write(bytecode, INSTRUCTION(opcode, target), line_table, &bc_index, cur_line);
+                if (ext_opcode != -1)
+                {
+                    bytecode_write(bytecode, INSTRUCTION(EXT, target), line_table, &bc_index, cur_line);
+                    bytecode_write(bytecode, (u8)ext_opcode, line_table, &bc_index, cur_line);
+                }
+                else
+
+                    bytecode_write(bytecode, INSTRUCTION(opcode, target), line_table, &bc_index, cur_line);
             }
             else
             {
