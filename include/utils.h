@@ -1,15 +1,21 @@
 #ifndef UTILS
 #define UTILS_H 1
 
-#include <stdio.h>
 #include <stdint.h>
+#include <stdio.h>
+
+#define FILE_SIZE(file)                                                                                                \
+    fseek(file, 0, SEEK_END);                                                                                          \
+    unsigned long long file_##size = ftell(file);                                                                       \
+    fseek(file, 0, SEEK_SET);
 
 char *read_to_heap(const char *filename);
 char *read_to_heap_bin(const char *filename, long *out_len);
 
 // Endianness detection and conversion
 
-typedef enum {
+typedef enum
+{
     ENDIAN_NONE = 0,
     ENDIAN_UNKNOWN,
     ENDIAN_LITTLE,

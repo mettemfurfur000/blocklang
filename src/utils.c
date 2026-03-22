@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-
 static endian_type system_endianness = ENDIAN_NONE;
 
 // Detect system endianness at runtime
@@ -47,19 +46,17 @@ char *read_to_heap(const char *filename)
     if (!file)
         return NULL;
 
-    fseek(file, 0, SEEK_END);
-    long filesize = ftell(file);
-    fseek(file, 0, SEEK_SET);
+    FILE_SIZE(file)
 
-    char *buffer = calloc(filesize + 1, 1);
+    char *buffer = calloc(file_size + 1, 1);
     if (!buffer)
     {
         fclose(file);
         return NULL;
     }
 
-    fread(buffer, 1, filesize, file);
-    buffer[filesize] = '\0';
+    fread(buffer, 1, file_size, file);
+    buffer[file_size] = '\0';
 
     fclose(file);
     return buffer;
@@ -73,20 +70,18 @@ char *read_to_heap_bin(const char *filename, long *out_len)
     if (!file)
         return NULL;
 
-    fseek(file, 0, SEEK_END);
-    long filesize = ftell(file);
-    fseek(file, 0, SEEK_SET);
+    FILE_SIZE(file)
 
-    char *buffer = calloc(filesize + 1, 1);
+    char *buffer = calloc(file_size + 1, 1);
     if (!buffer)
     {
         fclose(file);
         return NULL;
     }
 
-    fread(buffer, 1, filesize, file);
+    fread(buffer, 1, file_size, file);
 
-    *out_len = filesize;
+    *out_len = file_size;
 
     fclose(file);
     return buffer;
